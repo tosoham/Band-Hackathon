@@ -586,72 +586,66 @@ PDF export is useful, but Markdown export is acceptable if PDF polish threatens 
 
 ## 8. Two-Developer Execution Plan
 
-### Day 1 — Foundations and corpus
+The work is sliced by feature rather than by layer, so **both developers write backend (Python) and frontend (Next.js)**. Each owns one vertical half of the pipeline end-to-end — backend modules, the matching UI views, one provider integration, and the corpus docs that feed that half:
 
-**Goal:** Build a credible cybersecurity/government RFP foundation.
+- **Ishita — "Produce the answer" half:** Intake → Sales draft → Security/Evidence RAG → Product capability. Backend agents + retrieval, the AI/ML API integration, and the UI for the question queue, agent timeline, and evidence/citation panel.
+- **Soham — "Gate the answer" half:** Commitment/Policy guard → Adversarial review → Human approval → Exports/Ledger. Backend policy + orchestration + exports, the Featherless and Band integrations, and the UI for policy decisions, adversarial review, approvals, risk dashboard, and Promise Ledger.
 
-**AI Dev 1: Backend / Agents / Policy**
+**Shared, co-designed first (Day 1):** Pydantic schemas and the `output/state.json` contract — both halves read and write it, so agree on it before building. Whoever is unblocked picks up Docker/Compose infra; the other reviews.
 
-- Create Python project scaffold.
-- Create backend `Dockerfile`, root `docker-compose.yml`, `.env.example`, and `.dockerignore`.
-- Define Pydantic schemas.
-- Create `commitment_policy.yaml`.
-- Create sample questionnaire CSV with 30-40 rows.
-- Implement deterministic CSV intake.
-- Implement first policy guard rules for SLA, FedRAMP, EU-only, and sensitive artifacts.
+### Day 1 — Foundations and contracts
 
-**AI Dev 2: Frontend / Demo UX / Corpus**
+**Goal:** Build a credible foundation and lock the shared state contract.
 
-- Create Next.js project scaffold.
-- Create frontend `Dockerfile` and connect it to the Compose network.
-- Create dashboard shell.
-- Write first 8-10 knowledge base docs.
-- Define visual statuses and risk colors.
-- Mock question list, timeline, evidence panel, and policy decision panel.
+**Ishita — Answer half**
 
-**Integration gate:** `docker compose up --build` starts backend and frontend; one sample question can be loaded into state and displayed in the UI.
+- Backend: Python project scaffold; backend `Dockerfile`, root `docker-compose.yml`, `.env.example`, `.dockerignore`.
+- Backend: define Pydantic schemas and the `state.json` contract (co-designed with Soham).
+- Backend: deterministic CSV intake loader + prompt-injection scan on raw RFP text.
+- Frontend: question queue view with status/risk badges.
+- Corpus: write security/privacy/product KB docs (SOC 2, encryption, data residency, capabilities).
+
+**Soham — Gate half**
+
+- Frontend: Next.js scaffold; frontend `Dockerfile` connected to the Compose network; dashboard shell.
+- Frontend: define shared visual statuses and risk colors; mock the policy decision panel.
+- Backend: author `commitment_policy.yaml`; implement first deterministic policy guard rules (SLA, FedRAMP, EU-only, sensitive artifacts).
+- Corpus: write legal/policy KB docs + author the 30-40 row sample questionnaire CSV.
+
+**Integration gate:** `docker compose up --build` starts backend and frontend; one sample question loads into state and renders in the UI.
 
 ### Day 2 — Local workflow end-to-end
 
-**Goal:** Make the core workflow work locally before partner polish.
+**Goal:** Make the core workflow run locally before partner polish.
 
-**AI Dev 1**
+**Ishita — Answer half**
 
-- Implement Sales Engineer, Security RAG, Product Capability, and Commitment Guard flows.
-- Add simple retrieval over markdown docs.
-- Add citation tracking.
-- Add audit event creation.
-- Add unsupported-claim detection.
+- Backend: Sales Engineer, Security RAG, and Product Capability agents.
+- Backend: simple retrieval over markdown docs + citation tracking; expose the local API/state endpoint the UI reads.
+- Frontend: per-question agent timeline and the evidence/citation panel, rendered from local state.
 
-**AI Dev 2**
+**Soham — Gate half**
 
-- Build per-question review view.
-- Build human approval controls.
-- Build agent timeline rendering from local state.
-- Add Promise Ledger screen.
-- Add local API integration to backend state.
+- Backend: Commitment Guard agent, audit event creation, and unsupported-claim detection.
+- Backend: orchestrator wiring draft → evidence → policy review.
+- Frontend: per-question review view, human approval controls, and the Promise Ledger screen wired to backend state.
 
-**Integration gate:** `docker compose run backend python run_demo.py` processes 8-12 questions locally and the UI shows final/pending/blocked states.
+**Integration gate:** `docker compose run backend python run_demo.py` processes 8-12 questions; UI shows final/pending/blocked states.
 
 ### Day 3 — Band and provider integrations
 
 **Goal:** Make the workflow visible as a Band of Agents project.
 
-**AI Dev 1**
+**Ishita — Answer half**
 
-- Implement Band client wrapper.
-- Post room events for assignments, agent outputs, policy blocks, adversarial review, and human approval.
-- Integrate AI/ML API for structured intake or commitment decision.
-- Integrate Featherless for adversarial review.
-- Keep mocked fallback paths for rehearsal.
+- Backend: integrate AI/ML API for structured intake / draft (with mocked fallback).
+- Frontend: loading/error states for provider-backed steps; the prompt-injection demo question in the queue.
 
-**AI Dev 2**
+**Soham — Gate half**
 
-- Add Band event timeline to UI.
-- Add adversarial review panel.
-- Add prompt-injection demo question.
-- Add loading/error states for provider-backed steps.
-- Add demo reset button.
+- Backend: Featherless adversarial reviewer (prompt-injection, unsupported-claim, contradiction, hallucination scoring) with mocked fallback.
+- Backend: Band client wrapper posting room events (assignments, agent outputs, policy blocks, adversarial review, approval).
+- Frontend: Band event timeline, adversarial review panel, and a demo reset button.
 
 **Integration gate:** Band room shows the SLA conflict from assignment through policy block and approval request.
 
@@ -659,21 +653,15 @@ PDF export is useful, but Markdown export is acceptable if PDF polish threatens 
 
 **Goal:** Turn the workflow into a polished product demo.
 
-**AI Dev 1**
+**Ishita — Answer half**
 
-- Generate final response export.
-- Generate audit trail export.
-- Generate Promise Ledger export.
-- Harden retries and fallback behavior.
-- Add tests for conflict rules and hallucination gate.
+- Backend: harden retries/fallback for intake, RAG, and AI/ML API; add tests for the hallucination/citation gate.
+- Frontend: polish the question queue, agent timeline, and evidence panel; screenshot-ready answer states.
 
-**AI Dev 2**
+**Soham — Gate half**
 
-- Polish dashboard layout.
-- Add risk dashboard.
-- Add final export screen.
-- Add clear visual treatment for blocked, rewritten, approved, and adversarial findings.
-- Prepare screenshot-ready demo state.
+- Backend: final response, audit trail, and Promise Ledger exports; add tests for the deterministic conflict rules.
+- Frontend: risk dashboard, final export screen, and clear visual treatment for blocked/rewritten/approved/adversarial findings.
 
 **Integration gate:** Full demo runs without manual backend edits.
 
@@ -681,19 +669,15 @@ PDF export is useful, but Markdown export is acceptable if PDF polish threatens 
 
 **Goal:** No new architecture. Stabilize and submit.
 
-**AI Dev 1**
+**Ishita — Answer half**
 
-- Fix flaky backend/provider steps.
-- Finalize README run commands.
-- Confirm `docker compose run backend pytest` passes.
-- Prepare fallback demo mode.
+- Fix flaky intake/RAG/AI-ML steps; prepare fallback demo mode for the answer pipeline.
+- Finalize README run commands; confirm `docker compose run backend pytest` passes for answer-half tests.
 
-**AI Dev 2**
+**Soham — Gate half**
 
-- Record 3-minute demo flow.
-- Add screenshots.
-- Finalize pitch wording.
-- Package submission assets.
+- Fix flaky policy/adversarial/Band steps; confirm exports are stable.
+- Record the 3-minute demo flow, add screenshots, finalize pitch wording, and package submission assets.
 
 **Integration gate:** Demo shows upload/intake, Band agent workflow, SLA or FedRAMP conflict, hallucination/prompt-injection check, human approval, final response, and Promise Ledger.
 
