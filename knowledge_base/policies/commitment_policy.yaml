@@ -1,0 +1,40 @@
+commitment_policy_version: "2026.06"
+
+sla:
+  standard_uptime: "99.5%"
+  max_without_approval: "99.5%"
+  enterprise_ha_uptime: "99.9%"
+  requires_approval_if: ">=99.9%"
+  forbidden_phrases:
+    - "guaranteed uninterrupted service"
+    - "zero downtime"
+    - "unlimited service credits"
+  approved_phrase: "99.9% may be available under a separate HA deployment addendum."
+
+privacy:
+  eu_primary_hosting: true
+  eu_only_processing: false
+  customer_data_training_allowed: false
+  approved_data_residency_phrase: "Primary customer data can be hosted in the EU; limited operational telemetry may be processed globally under our DPA."
+
+security_artifacts:
+  soc2_report: "NDA_required"
+  pentest_report: "NDA_required"
+  architecture_diagram: "NDA_required"
+
+compliance:
+  soc2_type_ii: true
+  iso27001: true
+  fedramp_status: "in_process_not_authorized"
+  forbidden_phrases:
+    - "FedRAMP authorized"
+    - "FedRAMP certified"
+
+legal:
+  uncapped_liability_allowed: false
+  liability_cap: "fees paid in previous 12 months"
+  custom_indemnity_requires_legal: true
+
+implementation:
+  minimum_standard_go_live_weeks: 8
+  custom_integration_requires_scoping: true
