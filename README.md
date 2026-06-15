@@ -276,11 +276,14 @@ Then open:
 Run the demo pipeline and tests inside the backend container:
 
 ```bash
-# Process the questionnaire and write output/state.json
+# Process the questionnaire and write output/*.json + output/final_response.md
 docker compose run backend python run_demo.py
 
 # Run backend tests
 docker compose run backend pytest
+
+# Validate local Band agent credentials without making live WebSocket calls
+docker compose run --rm -v ./agent_config.yaml:/app/agent_config.yaml:ro backend python scripts/verify_band_agents.py
 ```
 
 ---
@@ -351,22 +354,18 @@ Current coverage:
 
 - **Conflict rules** (`test_conflict.py`) — SLA overcommitment, FedRAMP overclaim, EU-only
   residency, and prompt injection are correctly flagged.
-- **Injection scan** (`test_injection.py`) — genuine prompt injection is detected; benign
-  questions are not falsely flagged.
-- **Retrieval** (`test_rag.py`) — the corpus chunks load, queries return ranked cited evidence,
-  and empty queries return nothing.
-- **Answer agents** (`test_agents.py`) — Sales overclaims on the SLA conflict and never echoes
-  injection text; the Security agent is **citation-gated** (supported answers carry evidence,
-  unmatched questions are marked unsupported); Product classifies capability levels; the
-  pipeline attaches opinions to every question.
-- **AI/ML client** (`test_model_clients.py`) — mock mode is the default and never calls the
-  network; agents fall back to deterministic output when no provider is configured, and use the
-  model when available.
-- **Citation gate** (`test_citation_gate.py`) — a `supported_by_evidence` opinion with no
-  citations is downgraded to `unsupported`; the pipeline emits no ungrounded supported claims.
-- **Hardening** (`test_hardening.py`) — missing corpus yields empty retrieval (not a crash);
-  malformed CSV rows are skipped and a missing file errors clearly; AI/ML retries transient
-  failures and gives up cleanly, without retrying malformed responses.
+- **Band client** (`test_band_client.py`) — mock/lite Band event payloads are recorded without
+  exposing credentials or making platform calls.
+- **Orchestrator** (`test_orchestrator.py`) — the demo pipeline keeps 40 questions, finalizes
+  hero questions, writes policy/evidence-backed answers, emits audit events, and creates Promise
+  Ledger entries.
+
+`run_demo.py` writes:
+
+- `output/state.json`
+- `output/audit_trail.json`
+- `output/promise_ledger.json`
+- `output/final_response.md`
 
 ---
 

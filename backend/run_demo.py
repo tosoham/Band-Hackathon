@@ -1,14 +1,12 @@
-from pathlib import Path
-
-from agents.intake import build_initial_state
+from agents.orchestrator import build_demo_state
+from core.export import write_outputs
 
 
 def main() -> None:
-    output_dir = Path("output")
-    output_dir.mkdir(exist_ok=True)
-    state = build_initial_state()
-    (output_dir / "state.json").write_text(state.model_dump_json(indent=2), encoding="utf-8")
-    print(f"Wrote {len(state.questions)} questions to output/state.json")
+    state = build_demo_state()
+    write_outputs(state)
+    finalized = sum(1 for question in state.questions.values() if question.status == "finalized")
+    print(f"Wrote {len(state.questions)} questions, {finalized} finalized demo answers, and {len(state.promise_ledger)} ledger entries.")
 
 
 if __name__ == "__main__":

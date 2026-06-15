@@ -223,6 +223,7 @@ out/
 
 # BandGate generated demo outputs
 output/*.json
+output/*.jsonl
 output/*.md
 output/*.pdf
 

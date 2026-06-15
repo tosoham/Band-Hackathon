@@ -99,6 +99,25 @@ p {
   border-bottom: 1px solid var(--line);
 }
 
+.providerStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--line);
+  background: #edf4f8;
+}
+
+.providerStrip span {
+  border: 1px solid #bfd2df;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .metrics div {
   background: #ffffff;
   padding: 18px 32px;
@@ -174,6 +193,10 @@ p {
   font-size: 13px;
 }
 
+.answerPreview {
+  color: var(--ink);
+}
+
 .rowBadges {
   display: flex;
   flex-direction: column;
@@ -241,6 +264,13 @@ p {
   font-size: 13px;
 }
 
+.timeline small {
+  display: block;
+  margin-top: 4px;
+  color: var(--blue);
+  font-size: 12px;
+}
+
 .tagLine {
   display: flex;
   flex-wrap: wrap;
@@ -251,6 +281,24 @@ p {
 .tagLine span {
   color: var(--blue);
   font-size: 12px;
+  text-transform: capitalize;
+}
+
+.evidenceList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.evidenceList strong {
+  font-size: 13px;
+}
+
+.approval {
+  margin-top: 10px;
+  color: var(--green);
+  font-weight: 800;
   text-transform: capitalize;
 }
 

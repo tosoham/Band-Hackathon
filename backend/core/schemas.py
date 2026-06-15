@@ -38,9 +38,9 @@ class AgentOpinion(BaseModel):
     model_name: str = "day1-rule"
     answer: str
     confidence: float = Field(ge=0.0, le=1.0)
-    evidence: list[Evidence] = []
-    policy_violations: list[PolicyViolation] = []
-    risk_tags: list[str] = []
+    evidence: list[Evidence] = Field(default_factory=list)
+    policy_violations: list[PolicyViolation] = Field(default_factory=list)
+    risk_tags: list[str] = Field(default_factory=list)
 
 
 class Approval(BaseModel):
@@ -58,13 +58,13 @@ class RFPQuestionState(BaseModel):
     category: list[str]
     risk_level: RiskLevel
     assigned_agents: list[str]
-    opinions: list[AgentOpinion] = []
+    opinions: list[AgentOpinion] = Field(default_factory=list)
     conflict_detected: bool = False
     conflict_summary: str | None = None
     final_answer: str | None = None
     status: QuestionStatus = "open"
-    approvals: list[Approval] = []
-    risk_tags: list[str] = []
+    approvals: list[Approval] = Field(default_factory=list)
+    risk_tags: list[str] = Field(default_factory=list)
 
 
 class PromiseLedgerEntry(BaseModel):
@@ -93,6 +93,6 @@ class BandGateState(BaseModel):
     vendor_name: str
     policy_version: str
     questions: dict[str, RFPQuestionState]
-    promise_ledger: list[PromiseLedgerEntry] = []
-    audit_trail: list[AuditEvent] = []
+    promise_ledger: list[PromiseLedgerEntry] = Field(default_factory=list)
+    audit_trail: list[AuditEvent] = Field(default_factory=list)
     global_risk_score: float = Field(default=0.0, ge=0.0, le=1.0)

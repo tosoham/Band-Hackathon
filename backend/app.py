@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from agents.intake import build_initial_state
+from agents.orchestrator import build_demo_state
 from core.provider_config import load_provider_config
 
 app = FastAPI(title="BandGate API", version="0.1.0")
@@ -13,7 +13,7 @@ def health() -> dict[str, str]:
 
 @app.get("/state")
 def state() -> dict:
-    return build_initial_state().model_dump(mode="json")
+    return build_demo_state().model_dump(mode="json")
 
 
 @app.get("/providers")
