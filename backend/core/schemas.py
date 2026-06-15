@@ -92,6 +92,7 @@ class BandGateState(BaseModel):
     buyer_name: str
     vendor_name: str
     policy_version: str
+    provider_mode: str = "mock"
     questions: dict[str, RFPQuestionState]
     promise_ledger: list[PromiseLedgerEntry] = []
     audit_trail: list[AuditEvent] = []
