@@ -92,3 +92,15 @@ export type ProviderStatus = {
   thenvoi_rest_url: string;
   thenvoi_ws_url: string;
 };
+
+export type BandEventRecord = {
+  event_type: string;
+  rfp_id: string;
+  question_id: string | null;
+  agent: string;
+  summary: string;
+  risk_level: string | null;
+  requires_human_approval: boolean;
+  provider_mode: string;
+  timestamp: string;
+};

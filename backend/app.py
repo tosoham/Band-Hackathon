@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -39,6 +42,18 @@ def providers() -> dict[str, str | bool | None]:
         "thenvoi_rest_url": config.thenvoi_rest_url,
         "thenvoi_ws_url": config.thenvoi_ws_url,
     }
+
+
+@app.get("/band/events")
+def band_events() -> list[dict]:
+    path = Path("output/band_events.jsonl")
+    if not path.exists():
+        return []
+    events: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+    return events[-100:]
 
 
 @app.post("/questions/{question_id}/decision")

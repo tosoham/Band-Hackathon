@@ -334,6 +334,7 @@ npm run build
 | `GET` | `/health` | Liveness probe — `{"status": "ok", "service": "bandgate-backend"}`. |
 | `GET` | `/state` | Full `BandGateState` as JSON (built from the sample questionnaire). |
 | `GET` | `/providers` | Current provider modes and whether each key/package is configured. |
+| `GET` | `/band/events` | Last 100 recorded Band event payloads from mock/lite/live adapter flow. |
 
 The frontend's `page.tsx` reads `${BACKEND_URL}/state` and gracefully falls back to
 `lib/mockState.ts` if the backend is unreachable.

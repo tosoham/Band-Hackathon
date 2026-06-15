@@ -1,5 +1,5 @@
 import { mockState } from "../lib/mockState";
-import type { BandGateState, ProviderStatus, RFPQuestionState } from "../lib/types";
+import type { BandEventRecord, BandGateState, ProviderStatus, RFPQuestionState } from "../lib/types";
 
 async function getState(): Promise<BandGateState> {
   const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -36,6 +36,23 @@ async function getProviders(): Promise<ProviderStatus | null> {
   }
 }
 
+async function getBandEvents(): Promise<BandEventRecord[]> {
+  const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (!baseUrl) {
+    return [];
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/band/events`, { cache: "no-store" });
+    if (!response.ok) {
+      return [];
+    }
+    return (await response.json()) as BandEventRecord[];
+  } catch {
+    return [];
+  }
+}
+
 function riskClass(risk: string) {
   return `risk risk-${risk}`;
 }
@@ -49,6 +66,7 @@ function statusLabel(question: RFPQuestionState) {
 export default async function Home() {
   const state = await getState();
   const providers = await getProviders();
+  const bandEvents = await getBandEvents();
   const questions = Object.values(state.questions);
   const highRisk = questions.filter((question) => question.risk_level === "high").length;
   const criticalRisk = questions.filter((question) => question.risk_level === "critical").length;
@@ -174,6 +192,23 @@ export default async function Home() {
             <h3>Final Answer</h3>
             <p>{selected.final_answer ?? "No final answer generated yet."}</p>
             {selected.approvals.length ? <p className="approval">{selected.approvals[0].decision.replaceAll("_", " ")}</p> : null}
+          </article>
+
+          <article className="reviewPanel">
+            <h3>Band Event Stream</h3>
+            {bandEvents.length ? (
+              <ol className="timeline">
+                {bandEvents.slice(-6).map((event, index) => (
+                  <li key={`${event.timestamp}-${index}`}>
+                    <span>{event.event_type.replaceAll("_", " ")}</span>
+                    <p>{event.agent}: {event.summary}</p>
+                    <small>{event.question_id ?? "global"} · {event.provider_mode}</small>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>No Band events recorded yet. Run the demo pipeline or reset the backend state.</p>
+            )}
           </article>
         </div>
       </section>

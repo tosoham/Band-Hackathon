@@ -1,11 +1,8 @@
 from datetime import UTC, datetime
 
 from agents.adversarial_reviewer import red_team_answer
-from agents.intake import build_initial_state
+from agents.intake import build_state
 from agents.legal_commitment_guard import review_commitment
-from agents.product_capability import check_product_capability
-from agents.sales_engineer import draft_answer
-from agents.security_compliance import retrieve_security_answer
 from core.audit import make_audit_event
 from core.band_client import BandClient, BandEvent
 from core.policy_loader import load_commitment_policy
@@ -29,7 +26,7 @@ HERO_QUESTION_IDS = [
 
 
 def build_demo_state(post_band_events: bool = True) -> BandGateState:
-    state = build_initial_state()
+    state = build_state()
     policy = load_commitment_policy()
     band = BandClient() if post_band_events else None
 
@@ -48,22 +45,8 @@ def build_demo_state(post_band_events: bool = True) -> BandGateState:
 
 
 def _process_question(question: RFPQuestionState, policy: dict, state: BandGateState, band: BandClient | None) -> None:
-    question.status = "drafting"
     _post(band, "assignment", question, "orchestrator", f"Assigned {question.question_id} to specialist agents.")
-
-    sales = draft_answer(question)
-    question.opinions.append(sales)
-    _audit(state, sales.agent_name, "draft_answer", question, sales.answer)
-
-    question.status = "evidence_review"
-    security = retrieve_security_answer(question)
-    question.opinions.append(security)
-    _audit(state, security.agent_name, "retrieve_evidence", question, security.answer)
-
-    if "product_capability" in question.assigned_agents:
-        product = check_product_capability(question)
-        question.opinions.append(product)
-        _audit(state, product.agent_name, "check_capability", question, product.answer)
+    _audit_existing_answer_half(state, question)
 
     question.status = "policy_review"
     legal = review_commitment(question, policy)
@@ -115,6 +98,7 @@ def _choose_final_answer(question: RFPQuestionState) -> str:
 def _maybe_add_ledger_entry(state: BandGateState, question: RFPQuestionState) -> None:
     text = question.final_answer or ""
     entry: PromiseLedgerEntry | None = None
+    existing_ids = {item.commitment_id for item in state.promise_ledger}
 
     if question.question_id == "Q-001":
         entry = PromiseLedgerEntry(
@@ -147,7 +131,7 @@ def _maybe_add_ledger_entry(state: BandGateState, question: RFPQuestionState) ->
             approval_required=True,
         )
 
-    if entry and text:
+    if entry and text and entry.commitment_id not in existing_ids:
         state.promise_ledger.append(entry)
 
 
@@ -165,6 +149,18 @@ def _audit(state: BandGateState, actor: str, action: str, question: RFPQuestionS
             payload=question.model_dump(mode="json"),
         )
     )
+
+
+def _audit_existing_answer_half(state: BandGateState, question: RFPQuestionState) -> None:
+    action_by_agent = {
+        "sales_engineer": "draft_answer",
+        "security_compliance": "retrieve_evidence",
+        "product_capability": "check_capability",
+    }
+    for opinion in question.opinions:
+        action = action_by_agent.get(opinion.agent_name)
+        if action:
+            _audit(state, opinion.agent_name, action, question, opinion.answer)
 
 
 def _post(
