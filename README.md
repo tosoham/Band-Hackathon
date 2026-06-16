@@ -278,7 +278,7 @@ approved LLM adapter are filled. The official SDK docs describe `Agent.create(..
 cp .env.example .env
 
 # 2. Build and start backend + frontend
-docker compose up --build
+docker compose up -d --build
 ```
 
 Then open:
@@ -291,16 +291,19 @@ Run the demo pipeline and tests inside the backend container:
 
 ```bash
 # Process the questionnaire and write output/*.json + output/final_response.md
-docker compose run backend python run_demo.py
+docker compose run --rm backend python run_demo.py
 
 # Run backend tests
-docker compose run backend pytest
+docker compose run --rm backend pytest
 
 # Validate local Band agent credentials without making live WebSocket calls
 docker compose run --rm -v ./agent_config.yaml:/app/agent_config.yaml:ro backend python scripts/verify_band_agents.py
 
+# Sparse provider smoke test
+docker compose run --rm backend python scripts/probe_providers.py
+
 # Optional: keep the Band lite/mock event stream service running
-docker compose --profile band up band-service
+docker compose --profile band up -d band-service
 ```
 
 ---
@@ -352,6 +355,9 @@ npm run build
 | `GET` | `/state` | Full `BandGateState` as JSON (built from the sample questionnaire). |
 | `GET` | `/providers` | Current provider modes and whether each key/package is configured. |
 | `GET` | `/band/events` | Last 100 recorded Band event payloads from mock/lite/live adapter flow. |
+| `GET` | `/exports/final-response` | Final RFP response as Markdown. |
+| `GET` | `/exports/audit-trail` | Audit trail records as JSON. |
+| `GET` | `/exports/promise-ledger` | Promise Ledger records as JSON. |
 
 The frontend's `page.tsx` reads `${BACKEND_URL}/state` and gracefully falls back to
 `lib/mockState.ts` if the backend is unreachable.
@@ -374,6 +380,10 @@ Current coverage:
   residency, and prompt injection are correctly flagged.
 - **Band client** (`test_band_client.py`) — mock/lite Band event payloads are recorded without
   exposing credentials or making platform calls.
+- **Citation gate** (`test_citation_gate.py`) — unsupported evidence-backed claims are downgraded
+  before they can appear in a final answer.
+- **Exports** (`test_exports.py`) — final Markdown export, Promise Ledger records, and export
+  API routes stay consistent.
 - **Orchestrator** (`test_orchestrator.py`) — the demo pipeline keeps 40 questions, finalizes
   hero questions, writes policy/evidence-backed answers, emits audit events, and creates Promise
   Ledger entries.
@@ -384,6 +394,31 @@ Current coverage:
 - `output/audit_trail.json`
 - `output/promise_ledger.json`
 - `output/final_response.md`
+
+## Demo runbook
+
+For the most reliable final demo:
+
+1. Start the stack: `docker compose up -d --build`
+2. Regenerate canonical output: `docker compose run --rm backend python run_demo.py`
+3. Verify providers when live mode is enabled: `docker compose run --rm backend python scripts/probe_providers.py`
+4. Open the dashboard at `http://localhost:3000`
+5. Walk the SLA conflict, prompt-injection example, final export, and Promise Ledger panels
+
+For a one-command freeze check before recording or submitting:
+
+```bash
+python backend/scripts/final_demo_check.py
+```
+
+## Repo note
+
+GitHub is redirecting pushes from `tosoham/Band-Hackathon` to `tosoham/BandGate`. Updating the
+`origin` URL is recommended when you have a minute:
+
+```bash
+git remote set-url origin git@github.com:tosoham/BandGate.git
+```
 
 ---
 

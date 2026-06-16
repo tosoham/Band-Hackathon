@@ -18,9 +18,9 @@ def validate_config_shape() -> None:
 
 async def verify_live_connection(agent_name: str) -> None:
     try:
-        from thenvoi import Agent
-        from thenvoi.adapters import LangGraphAdapter
-        from thenvoi.config import load_agent_config
+        from band import Agent
+        from band.adapters.langgraph import LangGraphAdapter
+        from band.config import load_agent_config
         from langchain_openai import ChatOpenAI
         from langgraph.checkpoint.memory import InMemorySaver
     except ImportError as exc:

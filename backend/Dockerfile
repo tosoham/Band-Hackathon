@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 COPY backend/ ./
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN pip install --no-cache-dir -e ".[dev,band]"
 
 COPY data/ ./data/
 COPY knowledge_base/ ./knowledge_base/
