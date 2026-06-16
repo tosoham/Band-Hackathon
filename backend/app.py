@@ -5,8 +5,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from agents.approval import apply_decision
+from core.export import audit_trail_records, final_response_markdown, promise_ledger_records
 from core.provider_config import load_provider_config
 from core.state_store import get_state, reset_state
+from fastapi.responses import PlainTextResponse
 
 app = FastAPI(title="BandGate API", version="0.2.0")
 
@@ -67,6 +69,21 @@ def band_events() -> list[dict]:
         if line.strip():
             events.append(json.loads(line))
     return events[-100:]
+
+
+@app.get("/exports/final-response", response_class=PlainTextResponse)
+def final_response_export() -> str:
+    return final_response_markdown(get_state())
+
+
+@app.get("/exports/audit-trail")
+def audit_trail_export() -> list[dict]:
+    return audit_trail_records(get_state())
+
+
+@app.get("/exports/promise-ledger")
+def promise_ledger_export() -> list[dict]:
+    return promise_ledger_records(get_state())
 
 
 @app.post("/questions/{question_id}/decision")

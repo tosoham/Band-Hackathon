@@ -93,7 +93,7 @@ p {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
   background: var(--line);
   border-bottom: 1px solid var(--line);
@@ -303,6 +303,102 @@ p {
   text-transform: capitalize;
 }
 
+.dayFourGrid {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.35fr) minmax(280px, 0.8fr) minmax(280px, 0.85fr);
+  gap: 18px;
+  padding: 0 32px 40px;
+}
+
+.exportPanel {
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.exportPanelWide {
+  min-height: 420px;
+}
+
+.exportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.exportActions a {
+  border: 1px solid #a9c0d0;
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: var(--blue);
+  background: #f7fbfd;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.exportPreview {
+  max-height: 330px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #c7d5df;
+  border-radius: 8px;
+  background: #101820;
+  color: #e8f2f2;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ledgerList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ledgerList li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.ledgerList span {
+  display: block;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ledgerList strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.ledgerList p {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.ledgerList small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: capitalize;
+}
+
 @media (max-width: 900px) {
   .topbar {
     align-items: flex-start;
@@ -314,11 +410,13 @@ p {
   }
 
   .metrics,
-  .workspace {
+  .workspace,
+  .dayFourGrid {
     grid-template-columns: 1fr;
   }
 
-  .workspace {
+  .workspace,
+  .dayFourGrid {
     padding: 18px;
   }
 
