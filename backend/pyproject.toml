@@ -12,6 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "httpx2>=0.28.1",
   "pytest>=8.2.0",
 ]
 band = [
