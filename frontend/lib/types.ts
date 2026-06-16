@@ -90,6 +90,10 @@ export type ProviderStatus = {
   aiml_configured: boolean;
   aiml_enabled: boolean;
   featherless_live_ready: boolean;
+  aiml_model: string;
+  featherless_model: string;
+  aiml_live_limits: Record<string, number>;
+  featherless_live_limits: Record<string, number>;
   band_default_room_id: string | null;
   thenvoi_rest_url: string;
   thenvoi_ws_url: string;

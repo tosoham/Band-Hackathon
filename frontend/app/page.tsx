@@ -108,8 +108,8 @@ export default async function Home() {
 
       <section className="providerStrip" aria-label="Provider modes">
         <span>Band: {providers?.band_mode ?? "mock"}</span>
-        <span>AI/ML API: {providers?.aiml_enabled ? providers.aiml_mode : "disabled"}</span>
-        <span>Featherless: {providers?.featherless_live_ready ? providers.featherless_mode : "lite"}</span>
+        <span>AI/ML API: {providers?.aiml_enabled ? `${providers.aiml_mode} · ${providers.aiml_model}` : "disabled"}</span>
+        <span>Featherless: {providers?.featherless_live_ready ? `${providers.featherless_mode} · ${providers.featherless_model}` : "lite"}</span>
         <span>Ledger: {state.promise_ledger.length} commitments</span>
         <span>Audit: {state.audit_trail.length} events</span>
       </section>

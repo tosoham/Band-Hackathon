@@ -116,6 +116,7 @@ p {
   color: var(--ink);
   font-size: 12px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .metrics div {

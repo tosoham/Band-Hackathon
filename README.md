@@ -217,10 +217,15 @@ state canonical, so a flaky API never breaks the run. Configure keys in `.env`:
 | Variable | Used by | Purpose |
 |---|---|---|
 | `FEATHERLESS_API_KEY` | Adversarial reviewer | Independent red-team / hallucination scoring. |
-| `FEATHERLESS_BASE_URL` | Adversarial reviewer | OpenAI-compatible Featherless endpoint for live mode. |
-| `FEATHERLESS_MODEL` | Adversarial reviewer | Featherless model name for live mode. |
+| `FEATHERLESS_BASE_URL` | Adversarial reviewer | OpenAI-compatible Featherless endpoint; default `https://api.featherless.ai/v1`. |
+| `FEATHERLESS_MODEL` | Adversarial reviewer | Featherless model name; default `Qwen/Qwen2.5-7B-Instruct`. |
 | `AIML_API_KEY` | Intake + drafting + policy | Structured extraction and structured policy decisions, currently disabled by default. |
 | `AIML_ENABLED` | Intake + drafting + policy | Must be `true` before AI/ML API calls are allowed; keep `false` until credits are available. |
+| `AIML_BASE_URL` | Intake + drafting + policy | OpenAI-compatible AI/ML endpoint; default `https://api.aimlapi.com/v1`. |
+| `AIML_MODEL` | Intake + drafting + policy | Low-cost default from AI/ML quickstart: `google/gemma-3-4b-it`. |
+| `AIML_NORMALIZE_LIVE_LIMIT` | Intake | Max live AI/ML normalization calls per process; default `2`. |
+| `AIML_SALES_LIVE_LIMIT` | Sales draft | Max live AI/ML sales-draft calls per process; default `2`. |
+| `FEATHERLESS_REVIEW_LIVE_LIMIT` | Adversarial reviewer | Max live Featherless red-team calls per process; default `3`. |
 | `BAND_MODE` | Band client | `mock`, `lite`, or `live`; use `lite` while SDK/API quota is constrained. |
 | `FEATHERLESS_MODE` | Adversarial reviewer | `mock`, `lite`, or `live`; use `lite` for the free trial tier. |
 | `AIML_MODE` | Intake + drafting + policy | `mock`, `lite`, or `live`; use `lite` for the free tier. |
@@ -229,13 +234,17 @@ state canonical, so a flaky API never breaks the run. Configure keys in `.env`:
 | `BAND_DEFAULT_ROOM_ID` | Band SDK | Optional existing room ID for demo routing. |
 | `DEMO_MODE` | All providers | `mock` runs fully offline with deterministic fallbacks; set to live mode to exercise real provider calls. |
 
-> AI/ML is intentionally hard-disabled unless `AIML_ENABLED=true`. A key in `.env` is not enough
-> to trigger calls.
+> AI/ML is disabled unless `AIML_ENABLED=true`. A key in `.env` is not enough to trigger calls.
 
-For the current free/lite provider situation, keep `DEMO_MODE=mock` for rehearsals, keep
-`AIML_ENABLED=false`, and set only the provider you are actively demonstrating to `lite` or
-`live`. Lite mode uses deterministic local guardrails and provider-shaped metadata; live mode
-falls back if quota or rate limits fail.
+For sparse live testing, set only the provider you are actively demonstrating to `live`. Live
+calls are capped by the per-task limit env vars above, and every provider call falls back to
+deterministic local guardrails if quota, rate limits, or JSON parsing fail.
+
+Run a one-shot provider smoke test before the full demo:
+
+```bash
+PYTHONPATH=backend python backend/scripts/probe_providers.py
+```
 
 ### Band SDK setup
 

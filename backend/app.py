@@ -30,7 +30,7 @@ def state() -> dict:
 
 
 @app.get("/providers")
-def providers() -> dict[str, str | bool | None]:
+def providers() -> dict:
     config = load_provider_config()
     return {
         "band_mode": config.band_mode,
@@ -42,6 +42,15 @@ def providers() -> dict[str, str | bool | None]:
         "featherless_live_ready": bool(
             config.featherless_api_key and config.featherless_base_url and config.featherless_model
         ),
+        "aiml_model": config.aiml_model,
+        "featherless_model": config.featherless_model,
+        "aiml_live_limits": {
+            "normalize": config.aiml_normalize_live_limit,
+            "sales_draft": config.aiml_sales_live_limit,
+        },
+        "featherless_live_limits": {
+            "review": config.featherless_review_live_limit,
+        },
         "band_default_room_id": config.band_default_room_id,
         "thenvoi_rest_url": config.thenvoi_rest_url,
         "thenvoi_ws_url": config.thenvoi_ws_url,

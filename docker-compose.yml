@@ -5,15 +5,20 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       AIML_API_KEY: ${AIML_API_KEY:-}
+      AIML_BASE_URL: ${AIML_BASE_URL:-https://api.aimlapi.com/v1}
       AIML_ENABLED: ${AIML_ENABLED:-false}
+      AIML_MODEL: ${AIML_MODEL:-google/gemma-3-4b-it}
       AIML_MODE: ${AIML_MODE:-mock}
+      AIML_NORMALIZE_LIVE_LIMIT: ${AIML_NORMALIZE_LIVE_LIMIT:-2}
+      AIML_SALES_LIVE_LIMIT: ${AIML_SALES_LIVE_LIMIT:-2}
       BAND_MODE: ${BAND_MODE:-mock}
       BAND_DEFAULT_ROOM_ID: ${BAND_DEFAULT_ROOM_ID:-}
       DEMO_MODE: ${DEMO_MODE:-mock}
       FEATHERLESS_API_KEY: ${FEATHERLESS_API_KEY:-}
-      FEATHERLESS_BASE_URL: ${FEATHERLESS_BASE_URL:-}
-      FEATHERLESS_MODEL: ${FEATHERLESS_MODEL:-}
+      FEATHERLESS_BASE_URL: ${FEATHERLESS_BASE_URL:-https://api.featherless.ai/v1}
+      FEATHERLESS_MODEL: ${FEATHERLESS_MODEL:-Qwen/Qwen2.5-7B-Instruct}
       FEATHERLESS_MODE: ${FEATHERLESS_MODE:-mock}
+      FEATHERLESS_REVIEW_LIVE_LIMIT: ${FEATHERLESS_REVIEW_LIVE_LIMIT:-3}
       THENVOI_REST_URL: ${THENVOI_REST_URL:-https://app.band.ai/}
       THENVOI_WS_URL: ${THENVOI_WS_URL:-wss://app.band.ai/api/v1/socket/websocket}
     ports:
@@ -44,13 +49,14 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       AIML_ENABLED: ${AIML_ENABLED:-false}
+      AIML_MODEL: ${AIML_MODEL:-google/gemma-3-4b-it}
       BAND_MODE: ${BAND_MODE:-mock}
       BAND_DEFAULT_ROOM_ID: ${BAND_DEFAULT_ROOM_ID:-}
       BAND_SERVICE_LIVE: ${BAND_SERVICE_LIVE:-false}
       BAND_SERVICE_HEARTBEAT_SECONDS: ${BAND_SERVICE_HEARTBEAT_SECONDS:-30}
       FEATHERLESS_API_KEY: ${FEATHERLESS_API_KEY:-}
-      FEATHERLESS_BASE_URL: ${FEATHERLESS_BASE_URL:-}
-      FEATHERLESS_MODEL: ${FEATHERLESS_MODEL:-}
+      FEATHERLESS_BASE_URL: ${FEATHERLESS_BASE_URL:-https://api.featherless.ai/v1}
+      FEATHERLESS_MODEL: ${FEATHERLESS_MODEL:-Qwen/Qwen2.5-7B-Instruct}
       FEATHERLESS_MODE: ${FEATHERLESS_MODE:-mock}
       THENVOI_REST_URL: ${THENVOI_REST_URL:-https://app.band.ai/}
       THENVOI_WS_URL: ${THENVOI_WS_URL:-wss://app.band.ai/api/v1/socket/websocket}
