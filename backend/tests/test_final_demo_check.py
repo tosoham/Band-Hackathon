@@ -9,5 +9,6 @@ def test_final_demo_check_command_order() -> None:
         "backend tests",
         "demo export",
         "six-agent collaboration report",
+        "hardening report",
         "frontend build",
     ]

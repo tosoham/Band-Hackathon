@@ -10,6 +10,7 @@ Enterprise RFP answers are not paperwork. They are promises. BandGate brings six
 docker compose up -d --build
 docker compose run --rm backend python run_demo.py
 docker compose run --rm backend python scripts/run_band_collaboration.py
+docker compose run --rm backend python scripts/run_hardening_suite.py
 docker compose run --rm frontend npm run build
 python backend/scripts/final_demo_check.py
 ```
@@ -33,6 +34,16 @@ docker compose run --rm \
   -e BAND_COLLAB_INTAKE_RISK_LIMIT=1 \
   -e BAND_COLLAB_REPORT_LIMIT=1 \
   backend python scripts/run_band_collaboration.py
+```
+
+AI/ML + Featherless hardening run:
+
+```bash
+docker compose run --rm \
+  -e AIML_ENABLED=true \
+  -e AIML_MODE=live \
+  -e FEATHERLESS_MODE=live \
+  backend python scripts/run_hardening_suite.py
 ```
 
 Optional live Band collaboration send:
@@ -93,13 +104,19 @@ Show the Legal/Commitment Guard panel and drift findings.
 
 Show Drift Control and Six-Agent Band Room panels.
 
-### 2:30-2:50 - Human Approval
+### 2:30-2:45 - Harder Pressure Test
+
+"We also ran a live hardening suite against tougher buyer traps: SLA overclaims, FedRAMP bait, prompt injection, and sensitive disclosure requests. AI/ML handled structured intake and draft assist. Featherless independently scored the risky draft for hallucination and unsupported claims."
+
+Show `output/hardening_report.md`.
+
+### 2:45-2:55 - Human Approval
 
 "The human gate approves only the safe rewrite: standard SLA language, FedRAMP in progress but not authorized, reports under NDA, and malicious buyer instructions ignored."
 
 Show the final answer.
 
-### 2:50-3:00 - Promise Ledger
+### 2:55-3:00 - Promise Ledger
 
 "Every approved promise becomes a delivery obligation. The Promise Ledger tells Customer Success, Product, and Delivery what must actually happen after the deal closes."
 
@@ -121,6 +138,7 @@ If live Band room sending is slow, use the generated report:
 
 - `output/band_collaboration_transcript.json`
 - `output/band_chat_report.md`
+- `output/hardening_report.md`
 - dashboard Six-Agent Band Room panel
 - dashboard Drift Control panel
 
@@ -134,6 +152,7 @@ The story remains truthful: live Band agent connectivity is separately verified,
 - Backend tests pass.
 - Frontend build passes.
 - AI/ML smoke probe shows `aiml_probe: ok`.
+- Hardening report generated with visible `AI/ML` and `Featherless` usage.
 - Band verifier connects all six agents.
 - `output/band_chat_report.md` generated.
 - 3-minute video recorded.

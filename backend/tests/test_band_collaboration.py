@@ -33,3 +33,4 @@ def test_transcript_exposes_security_controls(monkeypatch) -> None:
     assert "prompt injection" in transcript
     assert "nda" in transcript
     assert "sales_sla_overpromise" in drift_tags
+    assert "featherless fallback path" in transcript

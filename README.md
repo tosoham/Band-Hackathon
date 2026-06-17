@@ -251,6 +251,13 @@ Run a one-shot provider smoke test before the full demo:
 PYTHONPATH=backend python backend/scripts/probe_providers.py
 ```
 
+Run the harder live-pressure suite when you want judge-visible `AI/ML` plus `Featherless`
+usage on tougher buyer traps:
+
+```bash
+PYTHONPATH=backend python backend/scripts/run_hardening_suite.py
+```
+
 ### Band SDK setup
 
 Band uses the `band-sdk` package and the `band` Python module. The SDK connects Remote
@@ -314,6 +321,9 @@ docker compose run --rm backend python scripts/probe_providers.py
 # Generate the six-agent Band collaboration transcript and chat report
 docker compose run --rm backend python scripts/run_band_collaboration.py
 
+# Pressure-test harder cybersecurity traps with AI/ML + Featherless
+docker compose run --rm backend python scripts/run_hardening_suite.py
+
 # Fast deterministic report for recording rehearsals
 docker compose run --rm -e BAND_COLLAB_SALES_LIMIT=0 -e BAND_COLLAB_INTAKE_RISK_LIMIT=0 -e BAND_COLLAB_REPORT_LIMIT=0 backend python scripts/run_band_collaboration.py
 
@@ -374,6 +384,7 @@ npm run build
 | `GET` | `/exports/audit-trail` | Audit trail records as JSON. |
 | `GET` | `/exports/promise-ledger` | Promise Ledger records as JSON. |
 | `GET` | `/exports/band-chat-report` | Generated six-agent Band collaboration report as Markdown. |
+| `GET` | `/exports/hardening-report` | Generated hardening stress-test report as Markdown. |
 
 The frontend's `page.tsx` reads `${BACKEND_URL}/state` and gracefully falls back to
 `lib/mockState.ts` if the backend is unreachable.
@@ -412,6 +423,8 @@ Current coverage:
 - `output/final_response.md`
 - `output/band_collaboration_transcript.json`
 - `output/band_chat_report.md`
+- `output/hardening_results.json`
+- `output/hardening_report.md`
 
 ## Demo runbook
 

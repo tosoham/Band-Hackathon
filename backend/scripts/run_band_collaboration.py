@@ -14,7 +14,10 @@ from core.band_sdk_runtime import EXPECTED_BAND_AGENTS, load_agent_config_shape,
 from core.drift_control import DriftFinding, evaluate_agent_drift
 from core.model_clients import (
     enrich_intake_risk,
+    generate_adversarial_review,
+    generate_sales_draft,
     get_provider_call_counts,
+    normalize_question,
     reset_provider_call_counts,
     summarize_demo_transcript,
 )
@@ -58,8 +61,11 @@ def _configure_fast_provider_path() -> None:
         os.environ["FEATHERLESS_MODE"] = "mock"
     os.environ["AIML_NORMALIZE_LIVE_LIMIT"] = os.getenv("BAND_COLLAB_NORMALIZE_LIMIT", "0")
     os.environ["AIML_SALES_LIVE_LIMIT"] = os.getenv("BAND_COLLAB_SALES_LIMIT", "1")
+    os.environ["AIML_DRIFT_ENABLE_LIVE"] = os.getenv("BAND_COLLAB_DRIFT_ENABLE", "true")
+    os.environ["AIML_DRIFT_LIVE_LIMIT"] = os.getenv("BAND_COLLAB_DRIFT_LIMIT", "2")
     os.environ["AIML_INTAKE_RISK_LIVE_LIMIT"] = os.getenv("BAND_COLLAB_INTAKE_RISK_LIMIT", "1")
     os.environ["AIML_REPORT_LIVE_LIMIT"] = os.getenv("BAND_COLLAB_REPORT_LIMIT", "1")
+    os.environ["FEATHERLESS_REVIEW_LIVE_LIMIT"] = os.getenv("BAND_COLLAB_FEATHERLESS_LIMIT", "1")
 
 
 def _question(state_questions: dict[str, RFPQuestionState], question_id: str) -> RFPQuestionState:
@@ -79,6 +85,7 @@ def build_six_agent_transcript() -> tuple[list[dict[str, Any]], list[dict[str, A
         f"{q_sla.raw_question} {q_fedramp.raw_question} "
         f"{q_artifact.raw_question} {q_injection.raw_question}"
     )
+    normalized_question = normalize_question(combined_question)
     intake_enrichment = enrich_intake_risk(
         combined_question,
         "government|security|legal",
@@ -98,6 +105,12 @@ def build_six_agent_transcript() -> tuple[list[dict[str, Any]], list[dict[str, A
     legal_fedramp = _agent_answer(q_fedramp, "legal_commitment_guard")
     legal_artifact = _agent_answer(q_artifact, "legal_commitment_guard")
     adversarial_prompt = _agent_answer(q_injection, "adversarial_reviewer")
+    sales_draft, sales_provider = _sales_message(combined_question, q_sla, q_fedramp, q_artifact, q_injection)
+    featherless_review = generate_adversarial_review(
+        combined_question,
+        sales_draft,
+        sorted(set(q_sla.risk_tags + q_fedramp.risk_tags + q_artifact.risk_tags + q_injection.risk_tags)),
+    )
 
     messages = [
         {
@@ -108,23 +121,21 @@ def build_six_agent_transcript() -> tuple[list[dict[str, Any]], list[dict[str, A
                 "@sales_engineer @security_compliance @product_capability "
                 "Public-sector RFP intake complete: 40 questions, critical prompt-injection text in Q-029, "
                 "and high-risk SLA/FedRAMP/security-artifact requests in Q-001, Q-002, and Q-004. "
+                f"Normalized intake: {normalized_question or 'not available'}. "
                 f"AI/ML risk reason: {_risk_reason(intake_enrichment)}"
             ),
             "mentions": AGENT_HANDOFFS["intake_agent"],
-            "ai_provider": "aiml" if intake_enrichment else "deterministic",
+            "ai_provider": _aiml_provider_label(bool(intake_enrichment or normalized_question)),
             "risk_tags": sorted(set(q_sla.risk_tags + q_fedramp.risk_tags + q_artifact.risk_tags + q_injection.risk_tags)),
         },
         {
             "agent": "sales_engineer",
             "event_type": "agent_output",
             "question_id": "Q-001/Q-002/Q-004",
-            "content": (
-                "@security_compliance @legal_commitment_guard Drafting optimistically: yes, we can promise "
-                "99.99% uptime with financial penalties, confirm FedRAMP authorization, and share the "
-                "pentest report and SOC 2 report right away."
-            ),
+            "content": f"@security_compliance @legal_commitment_guard {sales_draft}",
             "mentions": AGENT_HANDOFFS["sales_engineer"],
             "risk_tags": sorted(set(q_sla.risk_tags + q_fedramp.risk_tags + q_artifact.risk_tags)),
+            "ai_provider": sales_provider,
         },
         {
             "agent": "security_compliance",
@@ -169,11 +180,13 @@ def build_six_agent_transcript() -> tuple[list[dict[str, Any]], list[dict[str, A
             "content": (
                 "@intake_agent Red-team result: unsupported SLA/FedRAMP claims are blocked, sensitive artifacts "
                 "must not be shared before NDA review, and prompt injection is ignored. "
-                f"{adversarial_prompt}"
+                f"{adversarial_prompt} {_featherless_summary(featherless_review)}"
             ),
             "mentions": AGENT_HANDOFFS["adversarial_reviewer"],
             "risk_tags": q_injection.risk_tags + ["unsupported_claim", "hallucination_risk"],
             "requires_human_approval": True,
+            "ai_provider": _featherless_provider_label(bool(featherless_review)),
+            "provider_verdict": featherless_review,
         },
         {
             "agent": "human_gate",
@@ -199,10 +212,64 @@ def _agent_answer(question: RFPQuestionState, agent_name: str) -> str:
     return opinion.answer if opinion else question.conflict_summary or ""
 
 
+def _sales_message(
+    combined_question: str,
+    q_sla: RFPQuestionState,
+    q_fedramp: RFPQuestionState,
+    q_artifact: RFPQuestionState,
+    q_injection: RFPQuestionState,
+) -> tuple[str, str]:
+    risk_tags = sorted(set(q_sla.risk_tags + q_fedramp.risk_tags + q_artifact.risk_tags + q_injection.risk_tags))
+    draft = generate_sales_draft(combined_question, risk_tags)
+    if draft:
+        return (
+            "AI/ML draft assist suggested a buyer-friendly answer, but it still crossed policy lines: "
+            f"{draft[0]} To be explicit, this draft also states 99.99% uptime with financial penalties, "
+            "confirms FedRAMP authorization, and offers the pentest report and SOC 2 report right away.",
+            draft[1],
+        )
+    return (
+        "Drafting optimistically: yes, we can promise 99.99% uptime with financial penalties, confirm "
+        "FedRAMP authorization, and share the pentest report and SOC 2 report right away.",
+        _aiml_provider_label(False),
+    )
+
+
 def _risk_reason(enrichment: dict | None) -> str:
     if enrichment and isinstance(enrichment.get("risk_reason"), str):
         return enrichment["risk_reason"].strip()
     return "RFP text asks for unsupported commitments, sensitive disclosures, and policy override behavior."
+
+
+def _featherless_summary(review: dict | None) -> str:
+    if not review:
+        return "Featherless fallback path was used; deterministic red-team checks remain active."
+    finding = str(review.get("finding", "Featherless detected adversarial risk.")).strip()
+    severity = str(review.get("severity", "unknown")).strip()
+    hallucination = review.get("hallucination_score", "n/a")
+    unsupported = review.get("unsupported_claim_score", "n/a")
+    return (
+        f"Featherless verdict: {finding} Severity={severity}. "
+        f"hallucination_score={hallucination}, unsupported_claim_score={unsupported}."
+    )
+
+
+def _aiml_provider_label(succeeded: bool) -> str:
+    config = load_provider_config()
+    if succeeded:
+        return "aiml"
+    if config.aiml_enabled and config.aiml_mode == "live":
+        return "aiml_fallback"
+    return "deterministic"
+
+
+def _featherless_provider_label(succeeded: bool) -> str:
+    config = load_provider_config()
+    if succeeded:
+        return "featherless"
+    if config.featherless_mode == "live":
+        return "featherless_fallback"
+    return "deterministic"
 
 
 def _attach_drift_findings(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -326,11 +393,21 @@ def _report_markdown(
                 f"Question: {message.get('question_id') or 'global'}",
                 f"Mentions: {mentions}",
                 f"Drift control: {drift_label}",
+                f"Provider: {message.get('ai_provider') or 'deterministic'}",
                 "",
                 str(message["content"]),
                 "",
             ]
         )
+        provider_verdict = message.get("provider_verdict")
+        if provider_verdict:
+            lines.extend(
+                [
+                    "Provider verdict:",
+                    json.dumps(provider_verdict, indent=2),
+                    "",
+                ]
+            )
     lines.extend(["## Drift Findings", ""])
     if findings:
         for finding in findings:
