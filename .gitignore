@@ -226,6 +226,7 @@ output/*.json
 output/*.jsonl
 output/*.md
 output/*.pdf
+backend/output/
 
 # Band SDK credentials
 agent_config.yaml

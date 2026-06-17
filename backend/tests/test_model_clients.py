@@ -7,15 +7,25 @@ from core.model_clients import (
 )
 
 
-def test_aiml_requires_explicit_enable_even_with_key(monkeypatch) -> None:
+def test_aiml_disabled_explicitly_blocks_calls_even_with_key(monkeypatch) -> None:
+    # v2 flipped AIML_ENABLED to default true. The remaining safety check is
+    # that an explicit false still blocks live calls.
     monkeypatch.setenv("AIML_MODE", "live")
     monkeypatch.setenv("AIML_API_KEY", "test-key")
-    monkeypatch.delenv("AIML_ENABLED", raising=False)
+    monkeypatch.setenv("AIML_ENABLED", "false")
 
     assert aiml_available() is False
     plan = describe_model_call("aiml")
     assert plan.mode == "live"
     assert plan.live_enabled is False
+
+
+def test_aiml_enabled_by_default_when_key_and_mode_set(monkeypatch) -> None:
+    monkeypatch.setenv("AIML_MODE", "live")
+    monkeypatch.setenv("AIML_API_KEY", "test-key")
+    monkeypatch.delenv("AIML_ENABLED", raising=False)
+
+    assert aiml_available() is True
 
 
 def test_aiml_can_be_enabled_explicitly(monkeypatch) -> None:

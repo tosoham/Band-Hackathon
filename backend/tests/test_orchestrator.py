@@ -5,7 +5,9 @@ def test_demo_state_finalizes_hero_questions() -> None:
     state = build_demo_state(post_band_events=False)
     finalized = [question for question in state.questions.values() if question.status == "finalized"]
 
-    assert len(state.questions) == 40
+    # v1 sample was 40 questions; v2 builder extends to 115. Either is fine
+    # for the demo as long as the hero set is finalized.
+    assert len(state.questions) >= 40
     assert len(finalized) >= 8
     assert state.questions["Q-001"].final_answer
     assert "99.5%" in state.questions["Q-001"].final_answer

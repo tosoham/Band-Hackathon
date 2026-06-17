@@ -91,6 +91,7 @@ export type ProviderStatus = {
   aiml_enabled: boolean;
   featherless_live_ready: boolean;
   aiml_model: string;
+  aiml_embedding_model?: string;
   featherless_model: string;
   aiml_live_limits: Record<string, number>;
   featherless_live_limits: Record<string, number>;
@@ -107,7 +108,46 @@ export type BandEventRecord = {
   summary: string;
   risk_level: string | null;
   requires_human_approval: boolean;
-  payload?: unknown;
+  payload?: Record<string, unknown> | null;
   provider_mode: string;
   timestamp: string;
+};
+
+export type RfpQuestionSummary = {
+  question_id: string;
+  raw_question: string;
+  normalized_question: string;
+  category: string[];
+  risk_level: RiskLevel;
+  risk_tags: string[];
+  status: string;
+  conflict_summary: string | null;
+  has_final_answer: boolean;
+};
+
+export type RfpListResponse = {
+  rfp_id: string;
+  buyer_name: string;
+  vendor_name: string;
+  policy_version: string;
+  question_count: number;
+  questions: RfpQuestionSummary[];
+};
+
+export type HumanGateAction =
+  | "comment"
+  | "approve"
+  | "approve_with_edits"
+  | "push_back"
+  | "escalate"
+  | "reject";
+
+export type HumanMessagePayload = {
+  question_id: string;
+  content: string;
+  action: HumanGateAction;
+  mentions?: string[];
+  final_answer?: string;
+  approver_role?: string;
+  approver_name?: string;
 };

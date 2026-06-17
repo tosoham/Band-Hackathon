@@ -1,16 +1,21 @@
-"""Simple, reliable retrieval over the markdown knowledge base.
+"""Retrieval over the BandGate knowledge base.
 
-Day 2 keeps RAG deterministic and dependency-free: load markdown, chunk by
-heading, score chunks against the question by keyword overlap, and return the
-top matches as ``Evidence`` with citations. No embeddings or vector DB are
-required for the demo, which keeps the pipeline robust when provider APIs are
-flaky.
+The primary path is embedding-backed: AI/ML API embeds the query, the
+in-memory ``EmbeddingIndex`` returns cosine top-N, and AI/ML reranks down to
+``top_k``. If embeddings, the index, or the reranker fail for any reason
+(quota exhaustion, network blip, missing index file, AI/ML disabled), this
+module falls back to the original deterministic keyword overlap so the demo
+never breaks.
+
+The Day-2 keyword search is preserved here verbatim for that fallback.
 """
 
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from core.embeddings import get_index, IndexedChunk
+from core.model_clients import aiml_rerank
 from core.paths import find_resource
 from core.schemas import Evidence
 
@@ -59,7 +64,8 @@ def _chunk_markdown(path: Path, kb_root: Path) -> list[Chunk]:
                 )
             )
 
-    for line in path.read_text(encoding="utf-8").splitlines():
+    raw_lines = path.read_text(encoding="utf-8").splitlines()
+    for line in _strip_yaml_frontmatter(raw_lines):
         if line.startswith("#"):
             flush()
             heading = line.lstrip("#").strip()
@@ -68,6 +74,15 @@ def _chunk_markdown(path: Path, kb_root: Path) -> list[Chunk]:
             body.append(line)
     flush()
     return chunks
+
+
+def _strip_yaml_frontmatter(lines: list[str]) -> list[str]:
+    if not lines or lines[0].strip() != "---":
+        return lines
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return lines[i + 1 :]
+    return lines
 
 
 @lru_cache(maxsize=8)
@@ -85,7 +100,46 @@ def load_corpus(kb_root: str = DEFAULT_KB_ROOT) -> tuple[Chunk, ...]:
 
 
 def retrieve(query: str, top_k: int = 4, kb_root: str = DEFAULT_KB_ROOT) -> list[Evidence]:
-    """Return the top_k knowledge-base chunks most relevant to ``query``."""
+    """Return the top_k knowledge-base chunks most relevant to ``query``.
+
+    Embedding-first; keyword-overlap fallback when AI/ML is unavailable.
+    """
+    if not query or not query.strip():
+        return []
+    embedding_hits = _retrieve_via_embeddings(query, top_k=top_k)
+    if embedding_hits:
+        return embedding_hits
+    return _retrieve_via_keywords(query, top_k=top_k, kb_root=kb_root)
+
+
+def _retrieve_via_embeddings(query: str, *, top_k: int) -> list[Evidence]:
+    index = get_index()
+    if index is None or not index.ready:
+        return []
+    candidates = index.search(query, top_k=max(top_k * 5, 20))
+    if not candidates:
+        return []
+    rerank_inputs = [f"{c.chunk.heading}\n{c.chunk.text}" for c in candidates]
+    order = aiml_rerank(query, rerank_inputs, top_k=top_k)
+    if order is None:
+        # Cosine ranking is still meaningful; just take top_k as-is.
+        order = list(range(min(top_k, len(candidates))))
+    evidence: list[Evidence] = []
+    for rank, idx in enumerate(order):
+        candidate = candidates[idx]
+        evidence.append(
+            Evidence(
+                source_id=f"kb-{rank + 1}",
+                document_name=candidate.chunk.document_name,
+                chunk_id=candidate.chunk.chunk_id,
+                quote=_best_quote_from_indexed(candidate.chunk),
+                confidence=round(min(1.0, max(0.0, candidate.score)), 2),
+            )
+        )
+    return evidence
+
+
+def _retrieve_via_keywords(query: str, *, top_k: int, kb_root: str) -> list[Evidence]:
     query_tokens = _tokenize(query)
     if not query_tokens:
         return []
@@ -114,6 +168,14 @@ def retrieve(query: str, top_k: int = 4, kb_root: str = DEFAULT_KB_ROOT) -> list
 
 def _best_quote(chunk: Chunk) -> str:
     """Prefer the approved-wording line when present; otherwise the first sentence."""
+    lines = [line.strip() for line in chunk.text.splitlines() if line.strip()]
+    if chunk.heading.lower().startswith("approved") and lines:
+        return lines[0]
+    body = " ".join(lines)
+    return body[:240].strip()
+
+
+def _best_quote_from_indexed(chunk: IndexedChunk) -> str:
     lines = [line.strip() for line in chunk.text.splitlines() if line.strip()]
     if chunk.heading.lower().startswith("approved") and lines:
         return lines[0]

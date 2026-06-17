@@ -2,14 +2,28 @@ from agents.answer_pipeline import run_answer_pipeline
 from core.conflict import evaluate_question
 from core.injection import scan_text
 from core.model_clients import normalize_question, provider_mode
+from core.paths import find_resource
 from core.rfp_parser import load_questions
 from core.schemas import BandGateState, RFPQuestionState
+
+_CSV_CANDIDATES = (
+    "data/uploaded_rfp.csv",
+    "data/rfp_questions_v2.csv",
+    "data/sample_questionnaire.csv",
+)
+
+
+def _resolve_questionnaire_path() -> str:
+    for candidate in _CSV_CANDIDATES:
+        if find_resource(candidate).is_file():
+            return candidate
+    return _CSV_CANDIDATES[-1]
 
 
 def build_initial_state() -> BandGateState:
     questions: dict[str, RFPQuestionState] = {}
 
-    for row in load_questions("data/sample_questionnaire.csv"):
+    for row in load_questions(_resolve_questionnaire_path()):
         # The RFP is untrusted input: scan raw buyer text before anything
         # downstream can treat it as an instruction.
         injection = scan_text(row.question)
