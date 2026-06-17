@@ -53,23 +53,6 @@ async function getBandEvents(): Promise<BandEventRecord[]> {
   }
 }
 
-async function getFinalResponse(): Promise<string> {
-  const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!baseUrl) {
-    return "";
-  }
-
-  try {
-    const response = await fetch(`${baseUrl}/exports/final-response`, { cache: "no-store" });
-    if (!response.ok) {
-      return "";
-    }
-    return await response.text();
-  } catch {
-    return "";
-  }
-}
-
 function riskClass(risk: string) {
   return `risk risk-${risk}`;
 }
@@ -84,15 +67,11 @@ export default async function Home() {
   const state = await getState();
   const providers = await getProviders();
   const bandEvents = await getBandEvents();
-  const finalResponse = await getFinalResponse();
   const questions = Object.values(state.questions);
   const highRisk = questions.filter((question) => question.risk_level === "high").length;
   const criticalRisk = questions.filter((question) => question.risk_level === "critical").length;
   const blocked = questions.filter((question) => question.conflict_detected).length;
   const finalized = questions.filter((question) => question.status === "finalized").length;
-  const publicBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? "";
-  const recentAudit = state.audit_trail.slice(-6).reverse();
-  const exportPreview = finalResponse.split("\n").slice(0, 34).join("\n");
   const selected = questions.find((question) => question.risk_tags.includes("sla_overcommitment")) ?? questions[0];
 
   return (
@@ -124,10 +103,6 @@ export default async function Home() {
         <div>
           <span className="metricValue">{criticalRisk}</span>
           <span className="metricLabel">Critical</span>
-        </div>
-        <div>
-          <span className="metricValue">{blocked}</span>
-          <span className="metricLabel">Blocked / rewritten</span>
         </div>
       </section>
 
@@ -236,55 +211,6 @@ export default async function Home() {
             )}
           </article>
         </div>
-      </section>
-
-      <section className="dayFourGrid" aria-label="Final export and ledger">
-        <article className="exportPanel exportPanelWide">
-          <div className="sectionTitle">
-            <h2>Final Export</h2>
-            <span>{finalized} answers</span>
-          </div>
-          <div className="exportActions">
-            <a href={`${publicBackendUrl}/exports/final-response`}>Final response</a>
-            <a href={`${publicBackendUrl}/exports/promise-ledger`}>Promise Ledger</a>
-            <a href={`${publicBackendUrl}/exports/audit-trail`}>Audit trail</a>
-          </div>
-          <pre className="exportPreview">{exportPreview || "Run the backend demo pipeline to generate the final export."}</pre>
-        </article>
-
-        <article className="exportPanel">
-          <div className="sectionTitle">
-            <h2>Promise Ledger</h2>
-            <span>{state.promise_ledger.length} commitments</span>
-          </div>
-          <ol className="ledgerList">
-            {state.promise_ledger.map((entry) => (
-              <li key={entry.commitment_id}>
-                <span>{entry.commitment_id}</span>
-                <strong>{entry.owner_department}</strong>
-                <p>{entry.commitment_text}</p>
-                <small>{entry.due_stage.replaceAll("_", " ")} · {entry.delivery_action}</small>
-              </li>
-            ))}
-          </ol>
-        </article>
-
-        <article className="exportPanel">
-          <div className="sectionTitle">
-            <h2>Audit Trail</h2>
-            <span>{state.audit_trail.length} events</span>
-          </div>
-          <ol className="ledgerList">
-            {recentAudit.map((event) => (
-              <li key={event.event_id}>
-                <span>{event.actor.replaceAll("_", " ")}</span>
-                <strong>{event.action.replaceAll("_", " ")}</strong>
-                <p>{event.summary}</p>
-                <small>{event.question_id ?? "global"}</small>
-              </li>
-            ))}
-          </ol>
-        </article>
       </section>
     </main>
   );
