@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { NavShell } from "../components/NavShell";
 
 const sans = Geist({
   subsets: ["latin"],
@@ -35,10 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
-      <body>
-        <NavShell />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

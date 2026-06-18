@@ -12,6 +12,7 @@ import PolicyDecisionPanel from "./PolicyDecisionPanel";
 import AdversarialReviewPanel from "./AdversarialReviewPanel";
 import PromiseLedger from "./PromiseLedger";
 import LiveRoomPanel from "./LiveRoomPanel";
+import RfpUpload from "./RfpUpload";
 import { Logo } from "./Logo";
 import type {
   AgentOpinion,
@@ -647,6 +648,7 @@ export default function Dashboard({
 
         {view === "triage" && (
           <>
+            <RfpUpload />
             <section className="metrics" aria-label="Risk overview">
               <div className="stat stat-total">
                 <span className="statValue">{total}</span>
@@ -786,6 +788,7 @@ export default function Dashboard({
                   publicBackendUrl={publicBackendUrl}
                   onDecide={decide}
                   recommended={recommendedAnswer(selected)}
+                  initialStatus={selected.status}
                 />
               )}
 
