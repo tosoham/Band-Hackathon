@@ -6,6 +6,7 @@ deterministic citation-gated quote stitching is the fallback when AI/ML is
 unavailable or fails. Either way, no evidence means no supported claim.
 """
 
+from agents.reviewer_note import append_reviewer_note, normalize_reviewer_note
 from core.model_clients import aiml_available, aiml_reason
 from core.provider_config import load_provider_config
 from core.rag import retrieve
@@ -19,7 +20,13 @@ _UNSUPPORTED = (
 )
 
 
-def answer_from_evidence(question: str, top_k: int = 4) -> AgentOpinion:
+def answer_from_evidence(
+    question: str, top_k: int = 4, human_note: str | None = None
+) -> AgentOpinion:
+    # ``human_note`` is a reviewer @mention instruction from the human gate. It
+    # can steer phrasing but never licenses an unsupported claim — evidence
+    # still governs what can be said.
+    note = normalize_reviewer_note(human_note)
     evidence = retrieve(question, top_k=top_k)
 
     if not evidence:
@@ -43,15 +50,21 @@ def answer_from_evidence(question: str, top_k: int = 4) -> AgentOpinion:
     ]
 
     if aiml_available():
+        extra_instructions = (
+            "Reply with the safest cited answer. If the evidence does not "
+            "fully support a yes, say so explicitly. citations must use "
+            "chunk_ids from the retrieved evidence."
+        )
+        if note is not None:
+            extra_instructions += (
+                f" Human reviewer instruction to address (without exceeding the "
+                f"evidence): {note}"
+            )
         result = aiml_reason(
             "security_compliance",
             question,
             evidence=evidence_payload,
-            extra_instructions=(
-                "Reply with the safest cited answer. If the evidence does not "
-                "fully support a yes, say so explicitly. citations must use "
-                "chunk_ids from the retrieved evidence."
-            ),
+            extra_instructions=extra_instructions,
             max_tokens=320,
         )
         if result is not None:
@@ -70,6 +83,7 @@ def answer_from_evidence(question: str, top_k: int = 4) -> AgentOpinion:
     # wording we retrieved.
     answer = evidence[0].quote
     confidence = round(min(1.0, sum(e.confidence for e in evidence) / len(evidence)), 2)
+    answer = append_reviewer_note(answer, note)
 
     return AgentOpinion(
         agent_name=AGENT_NAME,

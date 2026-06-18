@@ -36,6 +36,17 @@ from core.schemas import AgentOpinion, Approval, BandGateState, PolicyViolation,
 DEFAULT_MAX_ROUNDS = 5
 HUMAN_GATE = "human_gate"
 
+# Agents that can produce a fresh turn when the adversarial reviewer flags them
+# or the human gate directs them with an @mention. intake_agent and
+# adversarial_reviewer have no redraft path at the gate, so a mention of either
+# is recorded but does not trigger a turn.
+REBUTTAL_AGENTS = {
+    "sales_engineer",
+    "security_compliance",
+    "product_capability",
+    "legal_commitment_guard",
+}
+
 
 @dataclass
 class HumanDecision:
@@ -153,7 +164,13 @@ class LiveOrchestrator:
             # Push-back from the human: rerun deliberation once with the human's
             # message attached as adversarial challenge.
             adversarial_challenge = f"Human reviewer says: {decision.content}"
-            await self._round_challenge_response(question, self.max_rounds, adversarial_challenge)
+            await self._round_challenge_response(
+                question,
+                self.max_rounds,
+                adversarial_challenge,
+                mentions=decision.mentions,
+                human_note=decision.content,
+            )
             await self._invite_human_gate(question, second_pass=True)
             decision = await self._await_human(question)
             await self._apply_human_decision(question, decision)
@@ -190,24 +207,53 @@ class LiveOrchestrator:
         question: RFPQuestionState,
         round_no: int,
         adversarial_challenge: str | None,
+        *,
+        mentions: list[str] | None = None,
+        human_note: str | None = None,
     ) -> None:
         if round_no == 1 or not adversarial_challenge:
             return
-        # Re-reason whichever agents the adversarial reviewer flagged.
+        # Agents flagged by the adversarial reviewer, plus any the human gate
+        # explicitly tagged with an @mention.
         targets = self._flagged_agents(question)
+        mentioned = {name for name in (mentions or []) if name in REBUTTAL_AGENTS}
+        targets |= mentioned
         if not targets:
             return
+
+        # Only a directly-mentioned agent acts on the human's free-text note.
+        # Reviewer-flagged rebuttals stay driven by the adversarial finding.
+        def note_for(agent: str) -> str | None:
+            return human_note if agent in mentioned else None
+
+        if "sales_engineer" in targets:
+            refreshed = draft_answer(
+                question.raw_question,
+                question.risk_tags,
+                human_note=note_for("sales_engineer"),
+            )
+            refreshed.risk_tags = sorted(set(refreshed.risk_tags + ["rebuttal"]))
+            question.opinions.append(refreshed)
+            await self._post_opinion(question, refreshed, round_no=round_no, prefix="Rebuttal")
         if "security_compliance" in targets:
-            refreshed = answer_from_evidence(question.normalized_question)
+            refreshed = answer_from_evidence(
+                question.normalized_question,
+                human_note=note_for("security_compliance"),
+            )
             refreshed.risk_tags = sorted(set(refreshed.risk_tags + ["rebuttal"]))
             question.opinions.append(refreshed)
             await self._post_opinion(question, refreshed, round_no=round_no, prefix="Rebuttal")
         if "product_capability" in targets:
-            refreshed = assess_capability(question.normalized_question)
+            refreshed = assess_capability(
+                question.normalized_question,
+                human_note=note_for("product_capability"),
+            )
             refreshed.risk_tags = sorted(set(refreshed.risk_tags + ["rebuttal"]))
             question.opinions.append(refreshed)
             await self._post_opinion(question, refreshed, round_no=round_no, prefix="Rebuttal")
         if "legal_commitment_guard" in targets:
+            # Legal is the hard policy gate — it re-asserts policy and never
+            # bends to a reviewer note, so no human_note is threaded in.
             refreshed = review_commitment(question, self.policy)
             refreshed.risk_tags = sorted(set(refreshed.risk_tags + ["rebuttal"]))
             question.opinions.append(refreshed)

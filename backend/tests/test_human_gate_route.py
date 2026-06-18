@@ -37,7 +37,8 @@ def test_human_message_routes_to_orchestrator() -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "queued"
+    # The route posts the human turn (with mentions) to the room immediately.
+    assert body["status"] == "posted"
     assert body["question_id"] == qid
     assert qid in orch._human_decisions
     decision = orch._human_decisions[qid]

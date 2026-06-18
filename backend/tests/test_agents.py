@@ -49,7 +49,8 @@ def test_sales_deterministic_fallback_acknowledges_reviewer_note() -> None:
     )
     assert opinion.provider == "deterministic"
     assert note in opinion.answer
-    assert "Revised per reviewer note" in opinion.answer
+    # Framed as a pending steer, not a completed revision (mock can't rewrite).
+    assert "applied in live mode" in opinion.answer
 
 
 def test_sales_without_note_is_unchanged() -> None:
@@ -58,7 +59,7 @@ def test_sales_without_note_is_unchanged() -> None:
         "Can you guarantee 99.9% uptime with financial penalties?",
         ["sla_overcommitment"],
     )
-    assert "Revised per reviewer note" not in opinion.answer
+    assert "applied in live mode" not in opinion.answer
 
 
 def test_security_note_does_not_exceed_evidence() -> None:

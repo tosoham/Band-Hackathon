@@ -6,6 +6,7 @@ synthesis when available; deterministic keyword rules from the original
 implementation remain as the fallback.
 """
 
+from agents.reviewer_note import append_reviewer_note, normalize_reviewer_note
 from core.model_clients import aiml_available, aiml_reason
 from core.provider_config import load_provider_config
 from core.rag import retrieve
@@ -48,7 +49,13 @@ _DEFAULT = (
 )
 
 
-def assess_capability(question: str, top_k: int = 4) -> AgentOpinion:
+def assess_capability(
+    question: str, top_k: int = 4, human_note: str | None = None
+) -> AgentOpinion:
+    # ``human_note`` is a reviewer @mention instruction from the human gate. It
+    # can steer the explanation but never upgrades the capability level beyond
+    # what the product actually supports.
+    note = normalize_reviewer_note(human_note)
     # Cite product corpus where possible.
     evidence = [e for e in retrieve(question, top_k=top_k) if e.document_name.startswith("product/")]
 
@@ -57,15 +64,21 @@ def assess_capability(question: str, top_k: int = 4) -> AgentOpinion:
             {"chunk_id": ev.chunk_id, "document_name": ev.document_name, "quote": ev.quote}
             for ev in evidence
         ]
+        extra_instructions = (
+            "Classify the capability as one of: "
+            + ", ".join(_LEVELS)
+            + ". State the level explicitly in the answer."
+        )
+        if note is not None:
+            extra_instructions += (
+                f" Human reviewer instruction to address (without overstating the "
+                f"true capability level): {note}"
+            )
         ai_result = aiml_reason(
             "product_capability",
             question,
             evidence=evidence_payload,
-            extra_instructions=(
-                "Classify the capability as one of: "
-                + ", ".join(_LEVELS)
-                + ". State the level explicitly in the answer."
-            ),
+            extra_instructions=extra_instructions,
         )
         if ai_result is not None:
             level = _detect_level(ai_result["answer"])
@@ -86,11 +99,14 @@ def assess_capability(question: str, top_k: int = 4) -> AgentOpinion:
             level, summary = candidate_level, candidate_summary
             break
 
+    answer = f"Capability: {level.replace('_', ' ')}. {summary}"
+    answer = append_reviewer_note(answer, note)
+
     return AgentOpinion(
         agent_name=AGENT_NAME,
         provider="deterministic",
         model_name="day2-rule",
-        answer=f"Capability: {level.replace('_', ' ')}. {summary}",
+        answer=answer,
         confidence=0.6,
         evidence=evidence,
         risk_tags=[f"capability_{level}"],

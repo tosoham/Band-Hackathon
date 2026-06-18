@@ -6,6 +6,7 @@ finalize a commitment. The Commitment Guard and Adversarial Reviewer (gate half)
 are what hold the line.
 """
 
+from agents.reviewer_note import append_reviewer_note, normalize_reviewer_note
 from core.model_clients import generate_sales_draft
 from core.schemas import AgentOpinion
 
@@ -51,7 +52,14 @@ _DEFAULT_DRAFT = (
 )
 
 
-def draft_answer(question: str, risk_tags: list[str]) -> AgentOpinion:
+def draft_answer(
+    question: str, risk_tags: list[str], human_note: str | None = None
+) -> AgentOpinion:
+    # ``human_note`` carries a reviewer's @mention instruction from the human
+    # gate (e.g. "soften the SLA claim"). The model addresses it directly; the
+    # deterministic fallback records it as a pending steer.
+    note = normalize_reviewer_note(human_note)
+
     # Prompt-injection text is untrusted: never send it to the model or echo it.
     if "prompt_injection" in risk_tags:
         return AgentOpinion(
@@ -68,7 +76,7 @@ def draft_answer(question: str, risk_tags: list[str]) -> AgentOpinion:
         )
 
     # Prefer the AI/ML API when configured; fall back to deterministic templates.
-    model_draft = generate_sales_draft(question, risk_tags)
+    model_draft = generate_sales_draft(question, risk_tags, human_note=note)
     if model_draft is not None:
         answer, model_name = model_draft
         return AgentOpinion(
@@ -86,6 +94,7 @@ def draft_answer(question: str, risk_tags: list[str]) -> AgentOpinion:
         if tag in risk_tags:
             answer = text
             break
+    answer = append_reviewer_note(answer, note)
 
     return AgentOpinion(
         agent_name=AGENT_NAME,

@@ -295,7 +295,7 @@ async def _run_deliberation(question_id: str) -> None:
 
 
 @app.post("/rooms/{room_id}/human-message")
-def human_message(room_id: str, body: HumanMessageRequest) -> dict:
+async def human_message(room_id: str, body: HumanMessageRequest) -> dict:
     orchestrator = get_orchestrator()
     if body.question_id not in orchestrator.state.questions:
         raise HTTPException(status_code=404, detail="unknown question")
@@ -307,8 +307,21 @@ def human_message(room_id: str, body: HumanMessageRequest) -> dict:
         approver_name=body.approver_name or "BandGate Operator",
         final_answer=body.final_answer,
     )
+    # Mirror the human turn into the room immediately so it streams over SSE,
+    # whether or not a deliberation loop is currently paused at the gate.
+    summary = body.content.strip() or f"{body.action.replace('_', ' ')} · {decision.approver_role}"
+    await orchestrator.publisher.post(
+        "human_gate",
+        summary,
+        rfp_id=orchestrator.state.rfp_id,
+        question_id=body.question_id,
+        event_type="human_message",
+        mentions=body.mentions or [],
+        requires_human_approval=False,
+        payload={"action": body.action, "approver_role": decision.approver_role},
+    )
     orchestrator.register_human_message(body.question_id, decision)
-    return {"status": "queued", "question_id": body.question_id, "room_id": room_id}
+    return {"status": "posted", "question_id": body.question_id, "room_id": room_id}
 
 
 @app.get("/rooms/{room_id}/events")
