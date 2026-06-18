@@ -946,3 +946,383 @@ The winning demo:
 > A government buyer asks for risky cybersecurity promises. Sales wants to say yes. Security and Product provide evidence. Legal policy blocks unsafe language. Featherless red-teams the answer for hallucination and prompt injection. A human approves the safe rewrite. The final response exports with audit trail, and every approved promise becomes a delivery obligation.
 
 That is Track 1. That is Band of Agents. That is more memorable than generic RFP automation.
+
+---
+---
+
+# BandGate v2 — Reasoning-First Live Build
+
+## Context
+
+The hackathon demo works end-to-end today, but three weaknesses block prize positioning and "real-world" credibility:
+
+1. **AI/ML API is sidecar, not load-bearing.** `AIML_ENABLED` defaults to `false`. Security, Legal, and Product agents never call it — they're deterministic rules. Sales / Intake / Adversarial call it but per-task limits cap usage at 2–6 calls. For "best AI/ML API use case," AI/ML must be the brain on the visible path.
+2. **The "Band room" is a transcript, not a room.** `backend/scripts/run_band_collaboration.py:479-551` posts 7 pre-scripted messages to a Band REST endpoint behind `BAND_COLLAB_LIVE=true` and exits. No subscription, no listening, no multi-round response, no UI streaming. The user cannot interact with agents.
+3. **RAG is keyword overlap.** `backend/core/rag.py:87-112` chunks markdown by heading and scores by token overlap — no embeddings, no reranking, no real retrieval quality.
+
+Goal: turn BandGate into a **live, reasoning-driven, six-agent deliberation room** with a human gate that can intervene in real time. Two-day spec, compressed to **one day** with two engineers working in parallel and agentic coding assist.
+
+User confirmed:
+- AI/ML defaults to live, live limits raised. Embeddings via AI/ML API.
+- Band integration is **orchestrator-driven**: backend posts as 6 distinct Band agent identities via REST. Multi-round loop in the orchestrator, not in independent Remote Agents.
+- Include a **stub org login** screen (single demo org).
+
+---
+
+## Architectural Targets
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Frontend (Next.js 16, client components added)                 │
+│   /login (stub)  /intake  /review/[qid]  /ledger  /audit        │
+│        │                       ▲                                │
+│        │ POST human msg        │ SSE: room events               │
+│        ▼                       │                                │
+└─────────────────────────────────│──────────────────────────────┘
+                                  │
+┌─────────────────────────────────│──────────────────────────────┐
+│  Backend (FastAPI)              │                              │
+│  POST /rooms/{rid}/human-message│  GET /rooms/{rid}/events     │
+│        │                        │  (SSE stream from JSONL tail)│
+│        ▼                                                       │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  LiveOrchestrator (NEW)                                  │  │
+│  │   Round 1: Sales | Security | Product | Legal | Intake   │  │
+│  │   Round 2: Adversarial (Featherless) reviews             │  │
+│  │   Round 3: Challenged agents rebut                       │  │
+│  │   Round N (≤5): consensus OR escalate to human           │  │
+│  │   On human message: re-enter targeted agent              │  │
+│  └─────────┬────────────────────────────────┬───────────────┘  │
+│            │                                │                  │
+│       per-agent AI/ML call            Featherless adversarial  │
+│            │                                │                  │
+│  ┌─────────▼───────────┐         ┌─────────▼──────────────┐   │
+│  │ AI/ML reasoning     │         │ Featherless red-team    │   │
+│  │ + AI/ML embeddings  │         │ (round-based judge)     │   │
+│  │ + AI/ML rerank      │         └────────────────────────┘   │
+│  └─────────────────────┘                                       │
+│            │                                                   │
+│  ┌─────────▼───────────────────────────────────────────────┐  │
+│  │ BandPublisher (NEW)                                      │  │
+│  │  6 × AsyncRestClient (one per agent identity)            │  │
+│  │  posts every round-turn into one Band room               │  │
+│  │  appends to output/band_events.jsonl                     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+Everything deterministic stays as the **final hard gate** (`backend/core/conflict.py`, `legal_commitment_guard.py` rules). AI/ML proposes; policy disposes. This preserves demo reliability and makes the prize story clean: "AI/ML drives reasoning; deterministic rules are the safety net."
+
+---
+
+## Workstream A — Backend (Soham)
+
+### A1. Make AI/ML live by default with real budget
+
+`backend/core/provider_config.py`
+- Default `AIML_ENABLED=true`.
+- Raise per-task live limits to demo-realistic numbers: `normalize=20`, `sales=30`, `drift=30`, `intake_risk=30`, `report=10`, `featherless_review=30`. Keep overridable via env.
+- Add new live limits: `aiml_reasoning_live_limit` (agents' per-round reasoning calls), `aiml_embedding_live_limit`, `aiml_rerank_live_limit`. Default each to 200.
+- Add `AIML_EMBEDDING_MODEL` (default `text-embedding-3-small` or AI/ML's equivalent — verify via probe).
+
+`backend/core/model_clients.py` (reuse `_chat_json` at `backend/core/model_clients.py:132`)
+- Add `aiml_embed(texts: list[str]) -> list[list[float]] | None` that POSTs to `{AIML_BASE_URL}/embeddings`. Same retry/backoff pattern as `_chat_json`.
+- Add `aiml_rerank(query, candidates) -> list[int] | None` that calls AI/ML chat with a structured JSON prompt asking it to rank candidates by relevance. Fall back to identity order.
+- Add `aiml_reason(agent_role, question, evidence, policy_slice) -> dict | None` — generic per-agent reasoning call returning `{answer, confidence, citations[], policy_concerns[], recommended_followups[]}`. This is the new load-bearing call.
+
+### A2. Replace RAG with embedding retrieval
+
+New file `backend/core/embeddings.py`
+- `build_index(kb_dir) -> EmbeddingIndex` — chunk every KB markdown by heading, embed via `aiml_embed`, persist `output/embedding_index.json` (chunk_id → vector + metadata).
+- `EmbeddingIndex.search(query, top_k=20) -> list[Candidate]` — cosine over in-memory vectors, returns top-20.
+
+Replace body of `backend/core/rag.py:retrieve` (don't delete the file — keep the public signature for callers):
+- Use `EmbeddingIndex.search(query, top_k=20)`, then `aiml_rerank(query, candidates)` → take top-4, return as `Evidence`.
+- On `aiml_*` failure: fall back to current keyword overlap. Demo never breaks.
+
+New script `backend/scripts/build_embedding_index.py`
+- Rebuilds `output/embedding_index.json` from current KB. Idempotent. Run once at container start (add to `docker-compose.yml` as a one-shot service or call from `run_demo.py`).
+
+### A3. Make AI/ML the reasoning brain in the silent agents
+
+Today, `security_compliance.py`, `legal_commitment_guard.py`, `product_capability.py` are pure rules. Wire `aiml_reason` into each:
+
+- `backend/agents/security_compliance.py:answer_from_evidence` — keep RAG retrieve, then call `aiml_reason("security_compliance", question, evidence, sla_compliance_slice)` to synthesize the answer with citations. Confidence comes from AI/ML response; provider becomes `aiml`. Fall back to current quote-stitching.
+- `backend/agents/legal_commitment_guard.py:review_commitment` — keep deterministic policy detection (lines 6–87 are the safety net), but also call `aiml_reason("legal_commitment_guard", question, draft_text, policy_yaml_slice)` to produce a *reasoning trace* attached to the opinion. Deterministic policy still has final say on `policy_violations`.
+- `backend/agents/product_capability.py:assess_capability` — replace keyword rules at lines 14–46 with `aiml_reason("product_capability", question, evidence, product_capabilities_md)`. Fall back to keyword rules on AI/ML failure.
+
+Update `AgentOpinion` use: every opinion in the live flow now carries `provider="aiml"`, `model_name=aiml_model`, real confidence from the reasoning call. Schema in `backend/core/schemas.py:35` already supports this — no change needed.
+
+### A4. Multi-round live deliberation orchestrator
+
+New file `backend/agents/live_orchestrator.py`
+- `class LiveOrchestrator` holds `state`, `band_publisher`, `event_emitter`, `policy`, `max_rounds=5`.
+- `async def deliberate(question_id)` runs the loop:
+  - Round 1: Intake assigns + Sales drafts + Security retrieves + Product assesses + Legal reviews. Each call is an AI/ML `aiml_reason` call. Each turn is posted to Band via `BandPublisher.post(agent, message, round_no)` and appended to JSONL.
+  - Round 2: `red_team_answer` (Featherless) reviews the current proposed answer + every claim. Posts as `adversarial_reviewer`. If no flags → break to consensus.
+  - Round 3+: agents whose claims were flagged re-reason with the adversarial finding in their prompt. Posted as new turns. Featherless reviews again. Loop until consensus or `max_rounds`.
+  - On consensus or max-rounds: post `human_gate` invitation, set status `human_review`, wait on `await self._human_signal.wait()` (asyncio Event keyed by question_id).
+  - Human decision arrives via `/rooms/{rid}/human-message` → sets event → orchestrator finalizes (or extends another round on `push_back`).
+- `await self.run_queue([q1, q2, ...])` — process hero questions sequentially for the demo; concurrent later.
+
+Reuse:
+- `backend/agents/intake.py:build_state` for initial state.
+- `backend/agents/adversarial_reviewer.py:red_team_answer` for Featherless.
+- `backend/core/audit.py:make_audit_event` for audit writes.
+- `backend/agents/orchestrator.py:_maybe_add_ledger_entry` (extract into shared module so both old `build_demo_state` and new live loop call it).
+
+### A5. Band publisher: 6 REST identities in one room
+
+New file `backend/core/band_publisher.py`
+- `class BandPublisher` loaded with `agent_config.yaml` via existing `backend/core/band_sdk_runtime.py:load_agent_config_shape` (line 23).
+- Constructor: instantiates one `band.client.rest.AsyncRestClient` per agent (6 total), reusing the pattern from `backend/scripts/run_band_collaboration.py:490-497`.
+- `async def ensure_room(rfp_id)` — uses intake_agent's `AgentTools` to create or join `BAND_DEFAULT_ROOM_ID`, calls `add_participant` for the other 5 (lines 508–514 pattern).
+- `async def post(agent_name, content, mentions, payload)` — selects the right client, calls `tools.send_message` (or `send_event` as fallback). Appends to `output/band_events.jsonl` in the same format `BandClient._write_local_event` already uses (line 63–68).
+- Implement live mode for `BandClient.post_event` in `backend/core/band_client.py:54-61` by delegating to `BandPublisher` (remove the `NotImplementedError` at line 60).
+- Fallback: if `BAND_MODE != "live"` or `agent_config.yaml` missing, all `post()` calls degrade to JSONL-only and the room is "simulated" — UI still streams events identically.
+
+### A6. SSE event stream + human-gate write path
+
+`backend/app.py`
+- New `GET /rooms/{room_id}/events` — `StreamingResponse(media_type="text/event-stream")` that tails `output/band_events.jsonl` (use `aiofiles` or a simple `asyncio.sleep`-and-seek loop) and pushes new lines as SSE frames. Keep-alive every 15s.
+- New `POST /rooms/{room_id}/human-message` — body `{question_id, content, mentions[], action: "comment"|"approve"|"push_back"|"escalate"}`. Writes an event with `agent="human_gate"`, appends to JSONL, signals the orchestrator's `asyncio.Event`, and records an `Approval` if action is decisive.
+- New `POST /rfp/upload` — stub: accepts a CSV upload, calls `core.rfp_parser` to parse, replaces or appends to state. For day-one, accept the existing sample CSV path as the only input.
+- New `GET /rfp/list` — returns the question list (a thinner projection of `/state` for the intake screen).
+- New `POST /auth/login` — stub. Body `{org_slug, email}`. Returns `{token: "demo", org: "SentinelAI"}`. Sets an httpOnly cookie. No validation beyond `org_slug == "demo"`.
+
+### A7. Real-world compliance corpus
+
+New directory `knowledge_base/external/` with markdown excerpts from:
+- NIST SP 800-53 r5 — Access Control (AC), Audit (AU), Incident Response (IR), System and Communications Protection (SC) families. ~20 control summaries, 1 chunk per control.
+- SOC 2 Trust Services Criteria — CC1–CC9 summaries.
+- FedRAMP baseline overview (Moderate impact level).
+- GDPR Article highlights (Art. 5, 6, 28, 30, 32, 33, 35).
+- CIS Controls v8 — top-10 critical security controls.
+
+These are public-domain or freely redistributable summaries — keep them short and paraphrased to avoid licensing concerns. Cite source in each file's frontmatter.
+
+`backend/scripts/build_questionnaire.py` (new)
+- Generates a 120-question RFP from real-world templates (CAIQ v4 / SIG / GSA security questionnaire structure). Output: `data/rfp_questions_v2.csv`.
+- Mix: 40 cybersecurity, 25 compliance, 20 privacy, 15 contractual, 10 product capability, 10 prompt-injection traps.
+
+Update `backend/agents/intake.py:build_state` to read the larger CSV when present, fall back to existing sample.
+
+### A8. Tests
+
+- `backend/tests/test_embeddings.py` — fixture index over 3 mock chunks; assert top-k ordering, AI/ML fallback path.
+- `backend/tests/test_live_orchestrator.py` — runs 1 question through the loop with stubbed AI/ML + Featherless; assert N rounds, audit events, Promise Ledger entry, final answer.
+- `backend/tests/test_band_publisher.py` — mock `AsyncRestClient`, assert 6 distinct senders, all events land in JSONL.
+- `backend/tests/test_human_gate_route.py` — POST `/rooms/.../human-message` with `push_back` advances round; with `approve` finalizes.
+- Existing tests must still pass — keep deterministic fallbacks reachable.
+
+---
+
+## Workstream B — Frontend (Ishita)
+
+### B1. Stub login screen
+
+`frontend/app/login/page.tsx` (NEW — client component)
+- Single form: org slug, email. Submit → `POST /auth/login` → set cookie via response, redirect to `/intake`.
+- Minimal styling using existing tokens in `frontend/app/globals.css:1-12`.
+
+`frontend/middleware.ts` (NEW)
+- Redirect unauthenticated requests to `/login` based on `bandgate_session` cookie.
+
+### B2. RFP intake screen
+
+`frontend/app/intake/page.tsx` (NEW)
+- Server component. Fetches `GET /rfp/list` → renders the 120-question table grouped by category, with risk badges.
+- "Open review" CTA per question → routes to `/review/[questionId]`.
+- "Upload new RFP" button → modal that POSTs `/rfp/upload` with the chosen CSV.
+
+### B3. Live review workspace
+
+`frontend/app/review/[questionId]/page.tsx` (NEW — server-rendered shell)
+- Server-fetches `GET /state` for the question's initial opinions + policy + evidence.
+- Renders existing review panels (reuse JSX patterns from `frontend/app/page.tsx:177-243`).
+- Embeds a client-only `<LiveRoomPanel question_id roomId />`.
+
+`frontend/components/LiveRoomPanel.tsx` (NEW — client component, `"use client"`)
+- On mount: opens `EventSource('/rooms/{roomId}/events')`.
+- Renders a streaming chat list keyed by round number. Each turn shows agent avatar (color-coded by role), message body, mentions, and timestamp.
+- Auto-scrolls to latest. Shows "Round N · adversarial review pending" banners.
+- Below the stream: a composer with
+  - text input
+  - @mention dropdown (6 agents + human_gate)
+  - action buttons: **Comment**, **Push back**, **Approve**, **Escalate**
+  - submit → `POST /rooms/{roomId}/human-message`
+- On `approve` or `escalate`, panel locks input and shows final answer.
+
+`frontend/lib/sse.ts` (NEW)
+- Tiny EventSource wrapper with reconnect on disconnect.
+
+`frontend/lib/api.ts` (NEW)
+- `postHumanMessage(roomId, body)`, `login(org, email)`, `uploadRfp(file)`. Reads `NEXT_PUBLIC_BACKEND_URL`.
+
+### B4. Promise Ledger + Audit Trail views
+
+`frontend/app/ledger/page.tsx` (NEW)
+- Server fetch `GET /exports/promise-ledger` → table view with filters by department, due_stage.
+
+`frontend/app/audit/page.tsx` (NEW)
+- Server fetch `GET /exports/audit-trail` → paginated list (50/page) with question filter.
+
+### B5. Navigation shell
+
+`frontend/app/layout.tsx` (EDIT)
+- Add a thin top nav: Intake · Live Review · Ledger · Audit · Org name pill.
+- Persistent across `/intake`, `/review/*`, `/ledger`, `/audit`.
+
+### B6. Existing dashboard
+
+`frontend/app/page.tsx` (EDIT)
+- Becomes a "system overview" route at `/dashboard`. Keep current sections — they're still useful as a judge landing page. Move the file or add a route alias.
+
+---
+
+## Files to create / modify (paths only — for execution)
+
+**New backend files**
+- `backend/core/embeddings.py`
+- `backend/core/band_publisher.py`
+- `backend/agents/live_orchestrator.py`
+- `backend/scripts/build_embedding_index.py`
+- `backend/scripts/build_questionnaire.py`
+- `backend/tests/test_embeddings.py`
+- `backend/tests/test_live_orchestrator.py`
+- `backend/tests/test_band_publisher.py`
+- `backend/tests/test_human_gate_route.py`
+- `knowledge_base/external/nist_800_53/*.md`
+- `knowledge_base/external/soc2_tsc.md`
+- `knowledge_base/external/fedramp_baseline.md`
+- `knowledge_base/external/gdpr_articles.md`
+- `knowledge_base/external/cis_controls_v8.md`
+- `data/rfp_questions_v2.csv`
+
+**Modified backend files**
+- `backend/core/provider_config.py` — defaults + new limits + embedding model
+- `backend/core/model_clients.py` — `aiml_embed`, `aiml_rerank`, `aiml_reason`
+- `backend/core/rag.py` — `retrieve` body swap
+- `backend/core/band_client.py` — wire live mode to `BandPublisher`
+- `backend/agents/security_compliance.py` — AI/ML reasoning
+- `backend/agents/legal_commitment_guard.py` — AI/ML reasoning trace
+- `backend/agents/product_capability.py` — AI/ML reasoning
+- `backend/agents/intake.py` — read v2 CSV when present
+- `backend/app.py` — `/rooms/{rid}/events` (SSE), `/rooms/{rid}/human-message`, `/rfp/upload`, `/rfp/list`, `/auth/login`
+- `backend/run_demo.py` — call `build_embedding_index` at start
+- `docker-compose.yml` — pass `AIML_ENABLED=true`, embedding model env var
+
+**New frontend files**
+- `frontend/app/login/page.tsx`
+- `frontend/app/intake/page.tsx`
+- `frontend/app/review/[questionId]/page.tsx`
+- `frontend/app/ledger/page.tsx`
+- `frontend/app/audit/page.tsx`
+- `frontend/middleware.ts`
+- `frontend/components/LiveRoomPanel.tsx`
+- `frontend/components/NavShell.tsx`
+- `frontend/lib/sse.ts`
+- `frontend/lib/api.ts`
+
+**Modified frontend files**
+- `frontend/app/layout.tsx` — nav shell
+- `frontend/app/page.tsx` — keep as `/dashboard` overview
+- `frontend/lib/types.ts` — add `RoomEvent`, `RoundTurn`, `HumanGateAction` types
+- `frontend/app/globals.css` — chat bubble + composer styles
+
+---
+
+## One-day sequencing
+
+Two people work in parallel. Use agentic coding assist (Claude Code, Codex) liberally — these are well-scoped tasks.
+
+### Soham (backend) — ~12 focused hours
+| Time | Task |
+|---|---|
+| H0–H1 | Bump AIML defaults + new limits in `provider_config.py`; add `aiml_embed` + `aiml_rerank` + `aiml_reason` in `model_clients.py` |
+| H1–H2 | `embeddings.py` + `build_embedding_index.py`; swap `rag.retrieve` body; verify against existing KB |
+| H2–H4 | Wire `aiml_reason` into security / legal / product agents; ensure deterministic fallback paths intact |
+| H4–H7 | `live_orchestrator.py` with bounded-round loop, Featherless judge round, rebuttal logic, human-signal asyncio.Event |
+| H7–H9 | `band_publisher.py` with 6 REST clients; replace `try_live_band_room` with `BandPublisher` calls; wire `BandClient` live mode |
+| H9–H10 | `/rooms/{rid}/events` SSE endpoint; `/rooms/{rid}/human-message`; `/auth/login`; `/rfp/upload`; `/rfp/list` |
+| H10–H11 | Compliance corpus seed files + `build_questionnaire.py` for 120-Q CSV |
+| H11–H12 | Tests + `final_demo_check.py` update + run hardening suite end-to-end |
+
+### Ishita (frontend) — ~10 focused hours
+| Time | Task |
+|---|---|
+| H0–H1 | `lib/sse.ts` + `lib/api.ts` + types in `lib/types.ts`; nav shell scaffold |
+| H1–H2 | `/login` client component + `middleware.ts` + cookie flow |
+| H2–H3 | `/intake` server-component page + question table + upload modal |
+| H3–H6 | `/review/[questionId]` page + `LiveRoomPanel` client component (EventSource, message rendering, auto-scroll) |
+| H6–H8 | Composer (text + @mention dropdown + Comment/Push back/Approve/Escalate) + POST wiring |
+| H8–H9 | `/ledger` + `/audit` views |
+| H9–H10 | Styling pass on chat bubbles, badges, mobile responsiveness; record demo flow |
+
+Sync points: H2 (backend endpoints contract locked), H6 (live event stream end-to-end), H10 (full demo dry-run).
+
+---
+
+## Risks + Fallbacks
+
+| Risk | Fallback |
+|---|---|
+| AI/ML embeddings endpoint differs from OpenAI shape | Detect at probe time, fall back to keyword `rag.retrieve` (already exists). Demo still works, prize story takes a small hit. |
+| Band REST flakiness during recording | `BandPublisher.post` always writes to JSONL first, REST second. SSE streams from JSONL → UI never stalls. Hold `BAND_MODE=lite` for recording if needed. |
+| Multi-round loop runs over budget per question | Hard cap `max_rounds=5`; on cap, force human gate with "rounds exhausted". |
+| Featherless free tier returns slow/empty | `red_team_answer` already falls back to deterministic `_score_answer_risk` — keep that path. |
+| Live AI/ML cost overrun | Per-task limits still enforced (just higher). Each agent call decrements a counter; on exhaust, fall back to current deterministic path. |
+| Live Band room not approved in time | `BAND_MODE=lite` path still publishes to JSONL; UI shows "simulated room" badge but full chat flow works. |
+| Ishita's SSE work blocked on backend contract | Provide a JSONL fixture and stub SSE server on `localhost:8001` early so UI can be built against fixed sample events. |
+
+---
+
+## Verification (end-to-end)
+
+```bash
+# 1. Configure
+cp .env.example .env                      # AIML_ENABLED=true is now the default
+cp agent_config.yaml.example agent_config.yaml   # fill in 6 Band agent UUIDs/keys
+
+# 2. Stand up
+docker compose up -d --build
+
+# 3. Seed
+docker compose run --rm backend python scripts/build_questionnaire.py
+docker compose run --rm backend python scripts/build_embedding_index.py
+docker compose run --rm backend python run_demo.py
+
+# 4. Run the live deliberation pipeline
+docker compose run --rm backend python scripts/run_band_collaboration.py
+docker compose run --rm backend python scripts/run_hardening_suite.py
+docker compose run --rm backend python scripts/generate_submission_pack.py
+
+# 5. Backend tests
+docker compose run --rm backend pytest -q
+```
+
+Manual demo walk:
+1. Browser → `http://localhost:3000/login` → enter `demo` / `demo@bandgate.test` → land on `/intake`.
+2. Pick Q-001 (SLA overcommitment) → `/review/Q-001`.
+3. Watch the live room populate: Intake → Sales draft → Security cite → Product capability → Legal block → Adversarial reviewer flags.
+4. Click **Push back** on Legal's answer with a comment → backend re-enters a round; new turns stream into the panel.
+5. Click **Approve** → final answer locks, `/ledger` shows the new Promise Ledger entry, `/audit` shows the full event chain.
+6. Visit `/dashboard` for the system overview.
+7. `python backend/scripts/final_demo_check.py` — must report all-green.
+
+Prize-story checks:
+- Open `output/band_chat_report.md` — every round-turn must show `provider: aiml` on the reasoning agents.
+- Open `output/hardening_report.md` — AI/ML and Featherless call counts must be visibly nonzero on all four scenarios.
+- Open the SSE stream in browser devtools — events must arrive within 1–2 seconds of orchestrator turn.
+- Embedding index file `output/embedding_index.json` exists and is non-empty.
+
+---
+
+## Out of scope (do NOT build)
+
+- Real multi-tenant auth (org switching, RBAC). Stub only.
+- Live Band Remote Agents via `band-sdk` `Agent.create()`. Out per user decision — orchestrator drives.
+- Production-grade WebSocket. SSE is enough for one-way streaming + REST for human input.
+- Endless chat. Hard cap `max_rounds=5` with forced human escalation.
+- Building our own RFP authoring tool. Buyer ships the RFP; we answer it.
+- Persisting state beyond JSON files. SQLite/Postgres is post-hackathon work.
