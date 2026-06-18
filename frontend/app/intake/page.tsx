@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { NavShell } from "../../components/NavShell";
 import { fetchRfpList } from "../../lib/api";
 import type { RfpQuestionSummary } from "../../lib/types";
 
@@ -15,7 +14,6 @@ export default async function IntakePage() {
 
   return (
     <>
-      <NavShell active="/intake" />
       <main className="appShell">
         <header className="appHeader">
           <div>

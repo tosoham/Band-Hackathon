@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import LiveRoomPanel from "../../../components/LiveRoomPanel";
-import { NavShell } from "../../../components/NavShell";
 import { fetchState } from "../../../lib/api";
 import type { AgentOpinion } from "../../../lib/types";
 
@@ -20,7 +19,6 @@ export default async function ReviewPage({ params }: { params: Promise<Params> }
   if (!question) {
     return (
       <>
-        <NavShell active="/intake" />
         <main className="appShell">
           <header className="appHeader">
             <h1>{questionId}</h1>
@@ -37,7 +35,6 @@ export default async function ReviewPage({ params }: { params: Promise<Params> }
 
   return (
     <>
-      <NavShell active="/intake" />
       <main className="appShell reviewShell">
         <header className="appHeader">
           <div>

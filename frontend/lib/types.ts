@@ -141,6 +141,18 @@ export type BandEventRecord = {
   timestamp: string;
 };
 
+export type RoomEvent = BandEventRecord;
+
+export type RoundTurn = {
+  round_no: number;
+  agent: string;
+  content: string;
+  provider?: string;
+  confidence?: number;
+  risk_tags?: string[];
+  timestamp: string;
+};
+
 export type RfpQuestionSummary = {
   question_id: string;
   raw_question: string;

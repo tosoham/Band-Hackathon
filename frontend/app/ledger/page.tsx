@@ -1,4 +1,3 @@
-import { NavShell } from "../../components/NavShell";
 import { backendUrl } from "../../lib/api";
 import type { PromiseLedgerEntry } from "../../lib/types";
 
@@ -19,7 +18,6 @@ export default async function LedgerPage() {
 
   return (
     <>
-      <NavShell active="/ledger" />
       <main className="appShell">
         <header className="appHeader">
           <div>

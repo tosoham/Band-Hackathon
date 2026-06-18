@@ -1,5 +1,4 @@
 import { mockState } from "../../lib/mockState";
-import { NavShell } from "../../components/NavShell";
 import type { BandEventRecord, BandGateState, ProviderStatus, RFPQuestionState } from "../../lib/types";
 
 async function getState(): Promise<BandGateState> {
@@ -78,7 +77,6 @@ export default async function Dashboard() {
 
   return (
     <>
-      <NavShell active="/dashboard" />
       <main>
         <header className="topbar">
           <div>

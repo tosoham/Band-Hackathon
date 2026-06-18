@@ -1,4 +1,3 @@
-import { NavShell } from "../../components/NavShell";
 import { backendUrl } from "../../lib/api";
 import type { AuditEvent } from "../../lib/types";
 
@@ -20,7 +19,6 @@ export default async function AuditPage() {
 
   return (
     <>
-      <NavShell active="/audit" />
       <main className="appShell">
         <header className="appHeader">
           <div>

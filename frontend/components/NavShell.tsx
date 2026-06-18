@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type NavItem = { href: string; label: string };
 
@@ -9,7 +12,14 @@ const ITEMS: NavItem[] = [
   { href: "/audit", label: "Audit Trail" },
 ];
 
-export function NavShell({ active }: { active: string }) {
+export function NavShell() {
+  const pathname = usePathname();
+
+  // The login screen owns the full viewport — no chrome there.
+  if (!pathname || pathname.startsWith("/login")) {
+    return null;
+  }
+
   return (
     <nav className="navShell" aria-label="Primary">
       <Link href="/intake" className="navBrand">
@@ -21,7 +31,7 @@ export function NavShell({ active }: { active: string }) {
           <li key={item.href}>
             <Link
               href={item.href}
-              className={item.href === active ? "navLink navLinkActive" : "navLink"}
+              className={pathname.startsWith(item.href) ? "navLink navLinkActive" : "navLink"}
             >
               {item.label}
             </Link>
