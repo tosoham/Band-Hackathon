@@ -17,6 +17,7 @@ library is used for the HTTP client (no extra deps).
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -24,6 +25,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 from core.provider_config import ProviderConfig, load_provider_config
+
+# Featherless bills by *concurrency units*: a single DeepSeek-V4-Pro request
+# costs the entire feather_pro_plus limit (4 units), so two overlapping calls
+# return HTTP 429. Serialize Featherless requests across worker threads — only
+# one in flight by default. Raise FEATHERLESS_MAX_CONCURRENCY if you switch to a
+# lighter model or upgrade the plan.
+_FEATHERLESS_MAX_CONCURRENCY = max(1, int(os.getenv("FEATHERLESS_MAX_CONCURRENCY", "1")))
+_FEATHERLESS_SEMAPHORE = threading.BoundedSemaphore(_FEATHERLESS_MAX_CONCURRENCY)
 
 ModelProvider = Literal["aiml", "featherless"]
 
@@ -168,27 +177,42 @@ def _chat_json(
         method="POST",
     )
 
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                body = json.loads(response.read().decode("utf-8"))
-            content = body["choices"][0]["message"]["content"]
-            parsed = _parse_json_object(content)
-            return parsed if isinstance(parsed, dict) else None
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1000]
-            print(f"[{provider_label}] HTTP {exc.code}: {detail}")
-            return None
-        except (urllib.error.URLError, TimeoutError) as exc:
-            # Transient network/server errors are worth retrying with backoff.
-            if attempt < _MAX_ATTEMPTS:
-                time.sleep(_BACKOFF_SECONDS * attempt)
-                continue
-            print(f"[{provider_label}] giving up after {attempt} attempts: {exc}")
-            return None
-        except (KeyError, ValueError, json.JSONDecodeError):
-            # A malformed response will not improve on retry — fall back now.
-            return None
+    # Hold the Featherless concurrency slot for the whole request (incl. retries)
+    # so we never exceed the plan's unit limit and trigger a 429.
+    semaphore = _FEATHERLESS_SEMAPHORE if provider_label == "featherless" else None
+    if semaphore is not None:
+        semaphore.acquire()
+    try:
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                content = body["choices"][0]["message"]["content"]
+                parsed = _parse_json_object(content)
+                return parsed if isinstance(parsed, dict) else None
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")[:1000]
+                # Rate / concurrency limits are transient — back off and retry
+                # rather than dropping straight to the deterministic fallback.
+                if exc.code == 429 and attempt < _MAX_ATTEMPTS:
+                    print(f"[{provider_label}] HTTP 429 (rate/concurrency) — retry {attempt}")
+                    time.sleep(_BACKOFF_SECONDS * attempt * 2)
+                    continue
+                print(f"[{provider_label}] HTTP {exc.code}: {detail}")
+                return None
+            except (urllib.error.URLError, TimeoutError) as exc:
+                # Transient network/server errors are worth retrying with backoff.
+                if attempt < _MAX_ATTEMPTS:
+                    time.sleep(_BACKOFF_SECONDS * attempt)
+                    continue
+                print(f"[{provider_label}] giving up after {attempt} attempts: {exc}")
+                return None
+            except (KeyError, ValueError, json.JSONDecodeError):
+                # A malformed response will not improve on retry — fall back now.
+                return None
+    finally:
+        if semaphore is not None:
+            semaphore.release()
     return None
 
 
