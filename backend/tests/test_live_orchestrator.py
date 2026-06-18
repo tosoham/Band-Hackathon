@@ -136,3 +136,77 @@ def test_push_back_advances_to_second_pass(tmp_path: Path) -> None:
     final = state.questions["Q-003"]
     assert final.status == "finalized"
     assert len(final.approvals) >= 2
+
+
+def test_mention_routes_a_rebuttal_to_the_tagged_agent(tmp_path: Path) -> None:
+    # sales_engineer is NEVER returned by _flagged_agents (Legal owns the
+    # rewrite), so a sales rebuttal turn after push-back can only come from the
+    # human gate @mention. This isolates the mention-routing wiring.
+    os.environ["BANDGATE_HUMAN_WAIT_SECONDS"] = "5"
+    state = _state_with_one_question("Q-007")
+    publisher = BandPublisher(_config(), event_log=str(tmp_path / "band_events.jsonl"))
+    orch = LiveOrchestrator(state, publisher=publisher, max_rounds=2)
+
+    note = "Soften the SLA claim; do not promise penalties."
+    orch.register_human_message(
+        "Q-007",
+        HumanDecision(action="push_back", content=note, mentions=["sales_engineer"]),
+    )
+
+    async def driver() -> None:
+        task = asyncio.create_task(orch.deliberate("Q-007"))
+        await asyncio.sleep(0.1)
+        orch.register_human_message(
+            "Q-007",
+            HumanDecision(action="approve", content="OK with new wording."),
+        )
+        await task
+
+    asyncio.run(driver())
+
+    question = state.questions["Q-007"]
+    # The reviewer flagging never targets sales_engineer, so this turn proves
+    # the mention drove it.
+    assert "sales_engineer" not in orch._flagged_agents(question)
+    sales_rebuttals = [
+        op
+        for op in question.opinions
+        if op.agent_name == "sales_engineer" and "rebuttal" in op.risk_tags
+    ]
+    assert sales_rebuttals, "tagging @sales_engineer must produce a rebuttal turn"
+    # And the tagged agent acted on the human's note (deterministic mock path).
+    if sales_rebuttals[-1].provider == "deterministic":
+        assert note in sales_rebuttals[-1].answer
+
+
+def test_unmentioned_unflagged_agent_stays_silent_on_push_back(tmp_path: Path) -> None:
+    # Negative control: a plain push-back with no mention must not conjure a
+    # sales_engineer rebuttal (it is never reviewer-flagged either).
+    os.environ["BANDGATE_HUMAN_WAIT_SECONDS"] = "5"
+    state = _state_with_one_question("Q-008")
+    publisher = BandPublisher(_config(), event_log=str(tmp_path / "band_events.jsonl"))
+    orch = LiveOrchestrator(state, publisher=publisher, max_rounds=2)
+
+    orch.register_human_message(
+        "Q-008",
+        HumanDecision(action="push_back", content="Tighten the wording."),
+    )
+
+    async def driver() -> None:
+        task = asyncio.create_task(orch.deliberate("Q-008"))
+        await asyncio.sleep(0.1)
+        orch.register_human_message(
+            "Q-008",
+            HumanDecision(action="approve", content="OK."),
+        )
+        await task
+
+    asyncio.run(driver())
+
+    question = state.questions["Q-008"]
+    sales_rebuttals = [
+        op
+        for op in question.opinions
+        if op.agent_name == "sales_engineer" and "rebuttal" in op.risk_tags
+    ]
+    assert not sales_rebuttals
