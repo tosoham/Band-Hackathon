@@ -330,7 +330,10 @@ def generate_adversarial_review(question: str, answer: str, risk_tags: list[str]
             f"Candidate final answer: {answer}\n"
             f"Risk tags: {', '.join(risk_tags) or 'none'}"
         ),
-        max_tokens=220,
+        # Headroom for large reasoning judges (e.g. DeepSeek-V4-Pro): 220 tokens
+        # truncated the scored JSON and the 25s default timeout forced retries.
+        max_tokens=320,
+        timeout=60,
         task="featherless_review",
     )
 
