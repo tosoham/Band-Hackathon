@@ -77,6 +77,7 @@ class LiveOrchestrator:
         self._human_decisions: dict[str, HumanDecision] = {}
         self._active: set[str] = set()
         self._lock = asyncio.Lock()
+        self._pipeline_task: asyncio.Task[Any] | None = None
 
     # ----- human gate plumbing -----
 
@@ -115,6 +116,80 @@ class LiveOrchestrator:
         for qid in question_ids:
             results.append(await self.deliberate(qid))
         return results
+
+    # ----- whole-questionnaire pipeline -----
+
+    _RISK_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+    def ordered_question_ids(self) -> list[str]:
+        """Every question id, highest-risk first, so the interesting ones stream first."""
+        return [
+            q.question_id
+            for q in sorted(
+                self.state.questions.values(),
+                key=lambda q: self._RISK_ORDER.get(q.risk_level, 9),
+            )
+        ]
+
+    def pipeline_running(self) -> bool:
+        return self._pipeline_task is not None and not self._pipeline_task.done()
+
+    def start_pipeline(self) -> bool:
+        """Kick a background task that deliberates every question sequentially.
+
+        Returns False if a pipeline is already running.
+        """
+        if self.pipeline_running():
+            return False
+        self._pipeline_task = asyncio.create_task(self._run_pipeline(self.ordered_question_ids()))
+        return True
+
+    def stop_pipeline(self) -> bool:
+        if self.pipeline_running():
+            self._pipeline_task.cancel()  # type: ignore[union-attr]
+            return True
+        return False
+
+    async def _run_pipeline(self, question_ids: list[str]) -> None:
+        await self.publisher.ensure_room(self.state.rfp_id)
+        await self.publisher.post(
+            "orchestrator",
+            f"Pipeline started · {len(question_ids)} questions queued (highest risk first).",
+            rfp_id=self.state.rfp_id,
+            question_id=None,
+            event_type="pipeline_started",
+            payload={"count": len(question_ids), "queue": question_ids[:50]},
+        )
+        try:
+            for index, qid in enumerate(question_ids, start=1):
+                await self.publisher.post(
+                    "orchestrator",
+                    f"Queue {index}/{len(question_ids)} · deliberating {qid}.",
+                    rfp_id=self.state.rfp_id,
+                    question_id=qid,
+                    event_type="pipeline_progress",
+                    payload={"index": index, "total": len(question_ids), "question_id": qid},
+                )
+                await self.deliberate(qid)
+        except asyncio.CancelledError:
+            await self.publisher.post(
+                "orchestrator",
+                "Pipeline stopped by operator.",
+                rfp_id=self.state.rfp_id,
+                question_id=None,
+                event_type="pipeline_stopped",
+                payload={},
+            )
+            raise
+        else:
+            await self.publisher.post(
+                "orchestrator",
+                "Pipeline complete · all questions processed.",
+                rfp_id=self.state.rfp_id,
+                question_id=None,
+                event_type="pipeline_complete",
+                payload={"count": len(question_ids)},
+            )
 
     # ----- inner loop -----
 

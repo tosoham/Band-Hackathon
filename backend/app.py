@@ -1,6 +1,5 @@
 import asyncio
 import json
-import shutil
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
@@ -13,6 +12,7 @@ from agents.live_orchestrator import HumanDecision
 from core.export import audit_trail_records, final_response_markdown, promise_ledger_records
 from core.orchestrator_store import get_orchestrator, reset_orchestrator
 from core.paths import project_root
+from core.rfp_ingest import pdf_to_rows, rows_to_csv_bytes
 from core.provider_config import load_provider_config
 from core.state_store import get_state, reset_state
 
@@ -260,16 +260,65 @@ def rfp_list() -> dict:
 
 
 @app.post("/rfp/upload")
-async def rfp_upload(file: UploadFile = File(...)) -> dict:
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="CSV file required")
+async def rfp_upload(file: UploadFile = File(...), autostart: bool = Query(default=True)) -> dict:
+    name = (file.filename or "").lower()
+    data = await file.read()
     target = project_root() / "data" / "uploaded_rfp.csv"
     target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as handle:
-        await asyncio.to_thread(shutil.copyfileobj, file.file, handle)
+
+    if name.endswith(".pdf"):
+        # Extract text and structure it into questions (AI/ML when live,
+        # deterministic heuristic in mock/lite mode).
+        rows = await asyncio.to_thread(pdf_to_rows, data)
+        if not rows:
+            raise HTTPException(status_code=400, detail="No questions could be extracted from the PDF")
+        target.write_bytes(rows_to_csv_bytes(rows))
+    elif name.endswith(".csv"):
+        target.write_bytes(data)
+    else:
+        raise HTTPException(status_code=400, detail="CSV or PDF file required")
+
     new_state = reset_state()
     reset_orchestrator()
-    return {"status": "ok", "rfp_id": new_state.rfp_id, "questions": len(new_state.questions)}
+
+    # The pipeline deliberates every question sequentially (highest risk first),
+    # streaming each into the Band room. Runs as a background task so upload returns now.
+    started = False
+    if autostart and new_state.questions:
+        started = get_orchestrator().start_pipeline()
+    return {
+        "status": "ok",
+        "rfp_id": new_state.rfp_id,
+        "questions": len(new_state.questions),
+        "pipeline_started": started,
+    }
+
+
+@app.post("/pipeline/start")
+async def pipeline_start() -> dict:
+    orchestrator = get_orchestrator()
+    if not orchestrator.state.questions:
+        raise HTTPException(status_code=400, detail="no questions loaded")
+    started = orchestrator.start_pipeline()
+    return {
+        "status": "started" if started else "already_running",
+        "questions": len(orchestrator.state.questions),
+    }
+
+
+@app.post("/pipeline/stop")
+async def pipeline_stop() -> dict:
+    stopped = get_orchestrator().stop_pipeline()
+    return {"status": "stopped" if stopped else "not_running"}
+
+
+@app.get("/pipeline/status")
+async def pipeline_status() -> dict:
+    orchestrator = get_orchestrator()
+    return {
+        "running": orchestrator.pipeline_running(),
+        "questions": len(orchestrator.state.questions),
+    }
 
 
 # ---------- v2: live deliberation ----------

@@ -23,7 +23,10 @@ export default function RfpUpload() {
     const ok = await uploadRfp(file);
     setBusy(false);
     if (ok) {
-      setStatus({ kind: "ok", text: `Uploaded ${file.name}. Reloading questions…` });
+      setStatus({
+        kind: "ok",
+        text: `Uploaded ${file.name}. Pipeline starting — open a question's Live Room to watch the agents deliberate.`,
+      });
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
       startTransition(() => router.refresh());
@@ -37,17 +40,18 @@ export default function RfpUpload() {
       <div className="uploadCopy">
         <h2>Upload a questionnaire</h2>
         <p>
-          RFP CSV with columns <code>question_id, category, question</code>. It replaces the active
-          set and reloads intake. Hero traps (Q-001/002/003/029) drive the demo.
+          RFP <strong>CSV</strong> (<code>question_id, category, question</code>) or a{" "}
+          <strong>PDF</strong> — a PDF is parsed into questions automatically. Uploading replaces
+          the active set and kicks off the deliberation pipeline across every question.
         </p>
       </div>
       <div className="uploadControls">
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,.pdf,text/csv,application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          aria-label="RFP questionnaire CSV"
+          aria-label="RFP questionnaire CSV or PDF"
         />
         <button type="button" onClick={onUpload} disabled={busy}>
           {busy ? "Uploading…" : "Upload & reload"}
