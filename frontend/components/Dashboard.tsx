@@ -24,7 +24,7 @@ import type {
 } from "../lib/types";
 
 type StateSource = "live" | "fallback" | "demo";
-type View = "overview" | "triage" | "review" | "bandroom" | "risk" | "ledger" | "exports";
+type View = "overview" | "intake" | "triage" | "review" | "bandroom" | "risk" | "ledger" | "exports";
 type SubTab = "agents" | "evidence" | "policy" | "adversarial" | "band" | "liveroom";
 
 const RISK_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -353,6 +353,7 @@ export default function Dashboard({
     { id: "overview", label: "Overview", icon: "home" },
   ];
   const NAV: { id: View; label: string; icon: IconName }[] = [
+    { id: "intake", label: "Intake", icon: "queue" },
     { id: "triage", label: "Triage", icon: "queue" },
     { id: "review", label: "Review", icon: "review" },
     { id: "bandroom", label: "Band Room", icon: "band" },
@@ -368,6 +369,11 @@ export default function Dashboard({
       eyebrow: "Band of Agents · Track 1",
       title: "Overview",
       subtitle: "Portfolio posture and entry point.",
+    },
+    intake: {
+      eyebrow: "Band of Agents · Track 1",
+      title: "Intake",
+      subtitle: "Upload an RFP questionnaire and load its questions.",
     },
     triage: {
       eyebrow: "Band of Agents · Track 1",
@@ -646,9 +652,33 @@ export default function Dashboard({
           </>
         )}
 
-        {view === "triage" && (
+        {view === "intake" && (
           <>
             <RfpUpload />
+            <section className="queueWide" aria-label="Loaded questions">
+              <div className="sectionTitle">
+                <h2>Loaded Questions</h2>
+                <span>{total} items</span>
+              </div>
+              <div className="questionList">
+                {questions.map((question) => (
+                  <QueueRow
+                    key={question.question_id}
+                    question={question}
+                    selected={question.question_id === selected.question_id}
+                    onClick={() => openReview(question.question_id)}
+                  />
+                ))}
+                {total === 0 ? (
+                  <p className="intakeEmpty">No questions loaded yet — upload a CSV or PDF above.</p>
+                ) : null}
+              </div>
+            </section>
+          </>
+        )}
+
+        {view === "triage" && (
+          <>
             <section className="metrics" aria-label="Risk overview">
               <div className="stat stat-total">
                 <span className="statValue">{total}</span>

@@ -34,7 +34,7 @@ export default async function ReviewPage({ params }: { params: Promise<Params> }
     );
   }
 
-  const rfpId = state?.rfp_id ?? "RFP-GOV-001";
+  const rfpId = state?.rfp_id ?? "";
   const chatItems: ChatItem[] = Object.values(state?.questions ?? {})
     .map((q) => ({
       id: q.question_id,

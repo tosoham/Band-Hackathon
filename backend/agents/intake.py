@@ -1,3 +1,5 @@
+import os
+
 from agents.answer_pipeline import run_answer_pipeline
 from core.conflict import evaluate_question
 from core.injection import scan_text
@@ -53,10 +55,12 @@ def build_initial_state() -> BandGateState:
             risk_tags=evaluation.risk_tags,
         )
 
+    # RFP identity is configurable via env (no hardcoded buyer/vendor) — defaults
+    # keep the demo populated, override with BANDGATE_RFP_ID / _BUYER_NAME / _VENDOR_NAME.
     return BandGateState(
-        rfp_id="RFP-GOV-001",
-        buyer_name="Public Sector Cybersecurity Review Board",
-        vendor_name="SentinelAI Security Platform",
+        rfp_id=os.getenv("BANDGATE_RFP_ID", "RFP-GOV-001"),
+        buyer_name=os.getenv("BANDGATE_BUYER_NAME", "Public Sector Cybersecurity Review Board"),
+        vendor_name=os.getenv("BANDGATE_VENDOR_NAME", "SentinelAI Security Platform"),
         policy_version="2026.06",
         provider_mode=provider_mode(),
         questions=questions,

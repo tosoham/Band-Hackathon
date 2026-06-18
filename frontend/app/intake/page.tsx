@@ -19,9 +19,9 @@ export default async function IntakePage() {
         <header className="appHeader">
           <div>
             <p className="eyebrow">RFP Intake</p>
-            <h1>{data?.rfp_id ?? "RFP-GOV-001"} · {data?.buyer_name ?? "Public Sector Buyer"}</h1>
+            <h1>{data?.rfp_id ?? "—"} · {data?.buyer_name ?? "—"}</h1>
             <p className="subtitle">
-              Vendor: {data?.vendor_name ?? "SentinelAI Security Platform"} · Policy version {data?.policy_version}
+              Vendor: {data?.vendor_name ?? "—"} · Policy version {data?.policy_version ?? "—"}
             </p>
           </div>
           <div className="metaPills">
