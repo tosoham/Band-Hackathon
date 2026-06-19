@@ -24,7 +24,7 @@ import type {
 } from "../lib/types";
 
 type StateSource = "live" | "fallback" | "demo";
-type View = "overview" | "intake" | "triage" | "review" | "bandroom" | "risk" | "ledger" | "exports";
+type View = "overview" | "intake" | "triage" | "review" | "bandroom" | "risk" | "ledger" | "audit" | "exports";
 type SubTab = "agents" | "evidence" | "policy" | "adversarial" | "band" | "liveroom";
 
 const RISK_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -361,6 +361,7 @@ export default function Dashboard({
   const NAV_ANALYSIS: { id: View; label: string; icon: IconName }[] = [
     { id: "risk", label: "Risk Dashboard", icon: "risk" },
     { id: "ledger", label: "Promise Ledger", icon: "ledger" },
+    { id: "audit", label: "Audit Trail", icon: "policy" },
     { id: "exports", label: "Exports", icon: "export" },
   ];
 
@@ -395,6 +396,11 @@ export default function Dashboard({
       eyebrow: "Delivery",
       title: "Promise Ledger",
       subtitle: "Every approved commitment becomes a delivery obligation.",
+    },
+    audit: {
+      eyebrow: "Audit",
+      title: "Audit Trail",
+      subtitle: "Every agent opinion, policy check, decision, and finalize — hashed and timestamped.",
     },
     exports: { eyebrow: "Audit", title: "Exports", subtitle: "Final response, audit trail, and Promise Ledger." },
   };
@@ -835,6 +841,34 @@ export default function Dashboard({
         {view === "bandroom" && <BandRoom events={bandEvents} report={bandReport} />}
         {view === "risk" && <RiskDashboard state={state} />}
         {view === "ledger" && <PromiseLedger state={state} />}
+        {view === "audit" && (
+          <section className="queueWide" aria-label="Audit trail">
+            <div className="sectionTitle">
+              <h2>Audit Trail</h2>
+              <span>{state.audit_trail.length} events</span>
+            </div>
+            {state.audit_trail.length === 0 ? (
+              <p className="intakeEmpty">
+                No audit events yet — they accrue as the agents deliberate and answers finalize.
+              </p>
+            ) : (
+              <ol className="timeline">
+                {[...state.audit_trail].reverse().map((event) => (
+                  <li key={event.event_id}>
+                    <span>
+                      {event.actor.replaceAll("_", " ")} · {event.action.replaceAll("_", " ")}
+                      {event.question_id ? ` · ${event.question_id}` : ""}
+                    </span>
+                    <p>{event.summary || "—"}</p>
+                    <small suppressHydrationWarning>
+                      {new Date(event.timestamp).toLocaleString()} · {event.payload_hash.slice(0, 12)}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        )}
         {view === "exports" && <ExportBar state={state} />}
       </div>
     </div>

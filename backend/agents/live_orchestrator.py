@@ -74,7 +74,9 @@ class LiveOrchestrator:
         self.policy = policy or load_commitment_policy()
         self.max_rounds = max_rounds
         self._human_signals: dict[str, asyncio.Event] = {}
-        self._human_decisions: dict[str, HumanDecision] = {}
+        # FIFO queue per question — a human can send several messages (e.g. a
+        # push-back then an approval) without one overwriting the other.
+        self._human_decisions: dict[str, list[HumanDecision]] = {}
         self._active: set[str] = set()
         self._lock = asyncio.Lock()
         self._pipeline_task: asyncio.Task[Any] | None = None
@@ -83,7 +85,7 @@ class LiveOrchestrator:
 
     def register_human_message(self, question_id: str, decision: HumanDecision) -> None:
         """Drop a human message in. Wakes the orchestrator if it is waiting."""
-        self._human_decisions[question_id] = decision
+        self._human_decisions.setdefault(question_id, []).append(decision)
         event = self._human_signals.get(question_id)
         if event is not None:
             event.set()
@@ -231,24 +233,29 @@ class LiveOrchestrator:
                 break
             adversarial_challenge = adversarial.answer if adversarial else None
 
-        await self._invite_human_gate(question)
-        decision = await self._await_human(question)
-        await self._apply_human_decision(question, decision)
-
-        if question.status == "human_review":
-            # Push-back from the human: rerun deliberation once with the human's
-            # message attached as adversarial challenge.
-            adversarial_challenge = f"Human reviewer says: {decision.content}"
-            await self._round_challenge_response(
-                question,
-                self.max_rounds,
-                adversarial_challenge,
-                mentions=decision.mentions,
-                human_note=decision.content,
-            )
-            await self._invite_human_gate(question, second_pass=True)
+        # The orchestrator only escalates risky answers to the human. Safe ones
+        # (consensus, no policy violations, no injection, low risk) auto-approve.
+        if self._needs_human_review(question):
+            await self._invite_human_gate(question)
             decision = await self._await_human(question)
             await self._apply_human_decision(question, decision)
+
+            if question.status == "human_review":
+                # Push-back from the human: rerun deliberation once with the human's
+                # message attached as adversarial challenge.
+                adversarial_challenge = f"Human reviewer says: {decision.content}"
+                await self._round_challenge_response(
+                    question,
+                    self.max_rounds,
+                    adversarial_challenge,
+                    mentions=decision.mentions,
+                    human_note=decision.content,
+                )
+                await self._invite_human_gate(question, second_pass=True)
+                decision = await self._await_human(question)
+                await self._apply_human_decision(question, decision)
+        else:
+            await self._auto_approve(question)
 
         await self._finalize(question)
 
@@ -390,6 +397,46 @@ class LiveOrchestrator:
             return security.answer
         return legal.answer if legal else "No approved final answer generated."
 
+    def _needs_human_review(self, question: RFPQuestionState) -> bool:
+        """True when an answer is risky enough to require a human decision.
+
+        Safe answers (consensus, no policy violations, no injection, low risk)
+        are auto-approved by the orchestrator and never touch the human gate.
+        """
+        if question.risk_level in {"high", "critical"}:
+            return True
+        if question.conflict_detected:
+            return True
+        if any(tag in question.risk_tags for tag in ("prompt_injection", "sensitive_disclosure")):
+            return True
+        # Any agent that recorded a concrete policy violation forces a human look.
+        for opinion in question.opinions:
+            if opinion.policy_violations:
+                return True
+        return False
+
+    async def _auto_approve(self, question: RFPQuestionState) -> None:
+        """Finalize a safe answer on the agents' behalf — no human needed."""
+        question.final_answer = question.final_answer or self._choose_final_answer(question)
+        question.status = "approved"
+        question.approvals.append(
+            Approval(
+                approver_role="Orchestrator (auto)",
+                approver_name="BandGate Orchestrator",
+                decision="approved",
+                comment="Auto-approved: consensus reached, no policy violations or risk flags.",
+                timestamp=datetime.now(UTC).isoformat(),
+            )
+        )
+        await self._post(
+            "orchestrator",
+            f"Auto-approved {question.question_id} — consensus, no violations, low risk. "
+            "No human review needed.",
+            question=question,
+            event_type="auto_approval",
+            payload={"reason": "safe", "risk_level": question.risk_level},
+        )
+
     async def _invite_human_gate(self, question: RFPQuestionState, *, second_pass: bool = False) -> None:
         question.status = "human_review"
         prompt = (
@@ -410,18 +457,20 @@ class LiveOrchestrator:
     async def _await_human(self, question: RFPQuestionState) -> HumanDecision:
         qid = question.question_id
         event = self._human_signals.setdefault(qid, asyncio.Event())
-        if qid not in self._human_decisions:
+        queue = self._human_decisions.setdefault(qid, [])
+        if not queue:
             try:
                 await asyncio.wait_for(event.wait(), timeout=_human_wait_timeout())
             except asyncio.TimeoutError:
                 # Default to a safe escalation if no human responds in time.
-                self._human_decisions[qid] = HumanDecision(
-                    action="escalate",
-                    content="No human response within timeout; auto-escalating.",
+                queue.append(
+                    HumanDecision(
+                        action="escalate",
+                        content="No human response within timeout; auto-escalating.",
+                    )
                 )
         event.clear()
-        decision = self._human_decisions.pop(qid)
-        return decision
+        return queue.pop(0)
 
     async def _apply_human_decision(self, question: RFPQuestionState, decision: HumanDecision) -> None:
         await self._post(

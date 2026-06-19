@@ -34,10 +34,10 @@ export default function BandRoom({ events, report }: { events: BandEventRecord[]
       <section className="bandRoom" aria-label="Band Room">
         <article className="reviewPanel bandRoomEmpty">
           <Icon name="band" size={30} />
-          <h3>No Band collaboration recorded yet</h3>
+          <h3>No deliberation yet</h3>
           <p>
-            Run <code>python backend/scripts/run_band_collaboration.py</code> to populate the six-agent
-            room, then reload this page.
+            Upload a questionnaire on the Intake tab to start the pipeline — the six agents&apos;
+            live conversation will stream here.
           </p>
         </article>
       </section>
@@ -142,9 +142,7 @@ export default function BandRoom({ events, report }: { events: BandEventRecord[]
             )}
           </>
         ) : (
-          <p>
-            Report not generated yet. Run <code>python backend/scripts/run_band_collaboration.py</code> to produce it.
-          </p>
+          <p>The report builds automatically as questions are finalized.</p>
         )}
       </article>
     </section>

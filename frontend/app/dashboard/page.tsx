@@ -244,7 +244,7 @@ export default async function Dashboard() {
                     ))}
                   </ol>
                 ) : (
-                  <p>No Band events recorded yet. Run the demo pipeline or reset the backend state.</p>
+                  <p>No Band events yet — upload a questionnaire to start the pipeline.</p>
                 )}
               </article>
             </div>
@@ -268,7 +268,7 @@ export default async function Dashboard() {
                 ))}
               </ol>
             ) : (
-              <p>Run the six-agent collaboration script to generate drift findings.</p>
+              <p>No drift findings yet — they appear as the agents deliberate.</p>
             )}
           </article>
 
@@ -284,7 +284,7 @@ export default async function Dashboard() {
               )}
             </div>
             <pre className="reportPreview">
-              {reportPreview || "Run python backend/scripts/run_band_collaboration.py to generate the report."}
+              {reportPreview || "The report builds automatically as the pipeline finalizes answers."}
             </pre>
           </article>
         </section>

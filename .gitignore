@@ -233,3 +233,6 @@ agent_config.yaml
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Runtime upload — not committed (live boot starts empty until upload)
+data/uploaded_rfp.csv

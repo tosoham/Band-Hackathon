@@ -41,7 +41,8 @@ def test_human_message_routes_to_orchestrator() -> None:
     assert body["status"] == "posted"
     assert body["question_id"] == qid
     assert qid in orch._human_decisions
-    decision = orch._human_decisions[qid]
+    # _human_decisions is a FIFO queue per question.
+    decision = orch._human_decisions[qid][-1]
     assert decision.action == "approve"
     assert decision.mentions == ["legal_commitment_guard"]
 

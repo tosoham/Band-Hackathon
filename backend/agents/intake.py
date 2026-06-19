@@ -22,10 +22,15 @@ def _resolve_questionnaire_path() -> str:
     return _CSV_CANDIDATES[-1]
 
 
-def build_initial_state() -> BandGateState:
+def build_initial_state(require_upload: bool = False) -> BandGateState:
     questions: dict[str, RFPQuestionState] = {}
 
-    for row in load_questions(_resolve_questionnaire_path()):
+    # Authentic start: with require_upload (live boot), the workspace stays empty
+    # until the user actually uploads a questionnaire — no preloaded sample.
+    has_upload = find_resource("data/uploaded_rfp.csv").is_file()
+    rows = [] if (require_upload and not has_upload) else load_questions(_resolve_questionnaire_path())
+
+    for row in rows:
         # The RFP is untrusted input: scan raw buyer text before anything
         # downstream can treat it as an instruction.
         injection = scan_text(row.question)

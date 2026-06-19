@@ -22,7 +22,8 @@ _state: BandGateState | None = None
 def _boot() -> BandGateState:
     if os.getenv("BANDGATE_BOOT_MODE", "lazy").lower() == "demo":
         return build_demo_state(post_band_events=False)
-    return build_initial_state()
+    # Live boot starts empty — questions appear only when an RFP is uploaded.
+    return build_initial_state(require_upload=True)
 
 
 def get_state() -> BandGateState:
