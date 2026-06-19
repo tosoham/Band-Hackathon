@@ -8,7 +8,7 @@ services:
   - type: web
     name: bandgate-backend
     runtime: docker
-    plan: free                      # free spins down after ~15 min idle; use "starter" for always-on
+    plan: starter                   # always-on (no idle spin-down), ~512MB, $7/mo; "standard" = 2GB/$25
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     healthCheckPath: /health
