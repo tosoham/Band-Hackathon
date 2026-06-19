@@ -313,6 +313,7 @@ export default function Dashboard({
   }
 
   async function decide(decision: Decision, role: string, finalAnswer?: string) {
+    if (!selected) return;
     const current = byId[selected.question_id];
     if (!current) return;
 
@@ -359,9 +360,9 @@ export default function Dashboard({
   const criticalRisk = questions.filter((q) => q.risk_level === "critical").length;
   const blocked = questions.filter((q) => q.conflict_detected).length;
   const finalized = questions.filter((q) => q.status === "approved" || q.status === "finalized").length;
-  const evidence = dedupeEvidence(selected.opinions);
-  const liveProvider = state.provider_mode !== "mock";
-  const stateInfo = answerState(selected);
+  const evidence = selected ? dedupeEvidence(selected.opinions) : [];
+  const liveProvider = live.provider_mode !== "mock";
+  const stateInfo = selected ? answerState(selected) : null;
 
   const derivedRisk =
     total > 0 ? questions.reduce((sum, q) => sum + (RISK_WEIGHT[q.risk_level] ?? 0), 0) / total : 0;
@@ -420,7 +421,7 @@ export default function Dashboard({
       subtitle: `${state.vendor_name} responding to ${state.buyer_name}`,
     },
     review: {
-      eyebrow: `${selected.question_id} · Review`,
+      eyebrow: `${selected?.question_id ?? "—"} · Review`,
       title: "Question Review",
       subtitle: "Draft, evidence, policy, adversarial check, and human sign-off.",
     },
@@ -444,7 +445,7 @@ export default function Dashboard({
   };
 
   const subTabs: { id: SubTab; label: string; icon: IconName; count?: number }[] = [
-    { id: "agents", label: "Agents", icon: "agents", count: selected.opinions.length },
+    { id: "agents", label: "Agents", icon: "agents", count: selected?.opinions.length ?? 0 },
     { id: "evidence", label: "Evidence", icon: "evidence", count: evidence.length },
     { id: "policy", label: "Policy", icon: "policy" },
     { id: "adversarial", label: "Adversarial", icon: "shield" },
@@ -762,7 +763,10 @@ export default function Dashboard({
           </>
         )}
 
-        {view === "review" && (
+        {view === "review" && !selected && (
+          <p className="intakeEmpty">No question selected — upload a questionnaire and pick a question to review.</p>
+        )}
+        {view === "review" && selected && (
           <section className="reviewLayout" aria-label="Question review">
             <div className="queueRail">
               <span className="railHead">Queue · {total}</span>
@@ -781,13 +785,13 @@ export default function Dashboard({
             </div>
 
             <div className="reviewDetail">
-              <article className={`reviewPanel answerState answer-${stateInfo.kind}`}>
+              <article className={`reviewPanel answerState answer-${stateInfo?.kind}`}>
                 <span className="answerIcon" aria-hidden>
-                  <Icon name={stateInfo.icon} size={20} />
+                  <Icon name={stateInfo?.icon ?? "alert"} size={20} />
                 </span>
                 <div>
-                  <span className="answerStateLabel">{stateInfo.label}</span>
-                  <p>{stateInfo.detail}</p>
+                  <span className="answerStateLabel">{stateInfo?.label}</span>
+                  <p>{stateInfo?.detail}</p>
                 </div>
               </article>
 

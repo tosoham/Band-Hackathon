@@ -59,8 +59,11 @@ export default async function Home() {
     loadBandEvents(),
     loadBandReport(),
   ]);
-  if (!state || Object.keys(state.questions).length === 0) {
-    return <EmptyWorkspace offline={!state} />;
+  // Only fall back to the bare screen when the backend is unreachable. When the
+  // backend is up but empty, render the full dashboard (sidebar + Intake/upload)
+  // so the workspace never disappears.
+  if (!state) {
+    return <EmptyWorkspace offline />;
   }
   return (
     <Dashboard
