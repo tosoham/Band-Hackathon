@@ -9,12 +9,13 @@ import type {
 export function backendUrl(): string {
   // Server components and route handlers should hit the in-cluster backend.
   // Client components must use the public URL the browser can reach.
-  if (typeof window === "undefined") {
-    return (
-      process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
-    );
-  }
-  return process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+  const raw =
+    typeof window === "undefined"
+      ? (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "")
+      : (process.env.NEXT_PUBLIC_BACKEND_URL ?? "");
+  // Strip trailing slashes so a value like "https://host/" doesn't build
+  // "https://host//state" (which 404s on FastAPI).
+  return raw.replace(/\/+$/, "");
 }
 
 export async function fetchState(): Promise<BandGateState | null> {

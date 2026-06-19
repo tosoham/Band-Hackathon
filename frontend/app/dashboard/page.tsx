@@ -2,7 +2,7 @@ import EmptyWorkspace from "../../components/EmptyWorkspace";
 import type { BandEventRecord, BandGateState, ProviderStatus, RFPQuestionState } from "../../lib/types";
 
 async function getState(): Promise<BandGateState | null> {
-  const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  const baseUrl = (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
   if (!baseUrl) return null;
   try {
     const response = await fetch(`${baseUrl}/state`, { cache: "no-store" });
@@ -14,7 +14,7 @@ async function getState(): Promise<BandGateState | null> {
 }
 
 async function getProviders(): Promise<ProviderStatus | null> {
-  const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  const baseUrl = (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
   if (!baseUrl) return null;
   try {
     const response = await fetch(`${baseUrl}/providers`, { cache: "no-store" });
@@ -26,7 +26,7 @@ async function getProviders(): Promise<ProviderStatus | null> {
 }
 
 async function getBandEvents(): Promise<BandEventRecord[]> {
-  const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  const baseUrl = (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
   if (!baseUrl) return [];
   try {
     const response = await fetch(`${baseUrl}/band/events`, { cache: "no-store" });
@@ -38,7 +38,7 @@ async function getBandEvents(): Promise<BandEventRecord[]> {
 }
 
 async function getBandChatReport(): Promise<string> {
-  const baseUrl = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  const baseUrl = (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
   if (!baseUrl) return "";
   try {
     const response = await fetch(`${baseUrl}/exports/band-chat-report`, { cache: "no-store" });
@@ -71,7 +71,7 @@ export default async function Dashboard() {
   const blocked = questions.filter((q) => q.conflict_detected).length;
   const finalized = questions.filter((q) => q.status === "finalized").length;
   const driftEvents = bandEvents.filter((e) => e.event_type === "drift_control_finding");
-  const publicBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? "";
+  const publicBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? "").replace(/\/+$/, "");
   const reportPreview = bandChatReport.split("\n").slice(0, 22).join("\n");
   const selected =
     questions.find((q) => q.risk_tags.includes("sla_overcommitment")) ?? questions[0];

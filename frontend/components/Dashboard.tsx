@@ -302,7 +302,7 @@ export default function Dashboard({
     };
     setById({ ...byId, [current.question_id]: updated });
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
     if (backendUrl) {
       try {
         await fetch(`${backendUrl}/questions/${current.question_id}/decision`, {

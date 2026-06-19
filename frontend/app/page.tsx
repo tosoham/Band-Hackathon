@@ -3,7 +3,8 @@ import EmptyWorkspace from "../components/EmptyWorkspace";
 import type { BandEventRecord, BandGateState } from "../lib/types";
 
 function backendBaseUrl() {
-  return process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  // Strip trailing slashes — "https://host/" + "/state" would 404 as "//state".
+  return (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
 }
 
 async function loadState(): Promise<BandGateState | null> {
@@ -67,7 +68,7 @@ export default async function Home() {
       source="live"
       bandEvents={bandEvents}
       bandReport={bandReport}
-      publicBackendUrl={process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}
+      publicBackendUrl={(process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "")}
     />
   );
 }

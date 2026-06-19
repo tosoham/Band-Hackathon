@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "org_slug and email required" }, { status: 400 });
   }
 
-  const backend = process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  const backend = (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
   let token = `demo:${body.org_slug}:${body.email}`;
   let org = "SentinelAI Security Platform";
   if (backend) {

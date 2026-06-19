@@ -26,7 +26,7 @@ export default function BandRoom({ events, report }: { events: BandEventRecord[]
   const drift = events.filter((event) => event.event_type === "drift_control_finding");
   const blocks = events.filter((event) => event.event_type === "policy_blocked");
   const agents = Array.from(new Set(events.map((event) => event.agent).filter(Boolean)));
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+  const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
   const reportPreview = report ? report.split("\n").slice(0, 40).join("\n") : "";
 
   if (events.length === 0) {

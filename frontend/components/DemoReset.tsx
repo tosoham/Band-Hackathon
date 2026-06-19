@@ -8,7 +8,7 @@ export default function DemoReset() {
 
   async function reset() {
     setBusy(true);
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
     if (backendUrl) {
       try {
         await fetch(`${backendUrl}/demo/reset`, { method: "POST" });

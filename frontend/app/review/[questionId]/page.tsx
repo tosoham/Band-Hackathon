@@ -17,7 +17,7 @@ export default async function ReviewPage({ params }: { params: Promise<Params> }
   const { questionId } = await params;
   const state = await fetchState();
   const question = state?.questions?.[questionId];
-  const publicBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+  const publicBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
 
   if (!question) {
     return (
