@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import RfpUpload from "../../components/RfpUpload";
+import DemoReset from "../../components/DemoReset";
 import { fetchRfpList } from "../../lib/api";
 import type { RfpQuestionSummary } from "../../lib/types";
 
@@ -28,6 +29,7 @@ export default async function IntakePage() {
             <span>{data?.question_count ?? 0} questions</span>
             <span>{totalRisk.high} high</span>
             <span>{totalRisk.critical} critical</span>
+            <DemoReset />
           </div>
         </header>
         <RfpUpload />

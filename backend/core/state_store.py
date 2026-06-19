@@ -37,3 +37,10 @@ def reset_state() -> BandGateState:
     global _state
     _state = _boot()
     return _state
+
+
+def reset_state_for_intake_refresh() -> BandGateState:
+    """Reset to a fresh live-style empty state, ignoring DEMO boot mode."""
+    global _state
+    _state = build_initial_state(require_upload=True)
+    return _state

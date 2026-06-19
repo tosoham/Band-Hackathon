@@ -30,9 +30,41 @@ function auditKind(action: string): "approved" | "alert" | "decision" | "neutral
   return "neutral";
 }
 
+function auditActionLabel(event: AuditEvent): string | null {
+  const action = event.action.toLowerCase();
+  const summary = event.summary.toLowerCase();
+  const actor = event.actor.toLowerCase();
+
+  if (action.includes("finalize")) return "Final answer locked";
+  if (action.includes("ledger")) return "Promise ledger entry";
+  if (action.includes("reject")) return "Rejection recorded";
+  if (action.includes("escalat")) return "Escalation recorded";
+  if (action.includes("approve") || summary.includes("approved")) return "Approval recorded";
+  if (action.includes("decision") || action.includes("human") || action.includes("gate")) return "Human decision";
+  if (action.includes("injection") || summary.includes("prompt injection")) return "Prompt injection finding";
+  if (actor.includes("legal_commitment_guard")) return "Policy check";
+  if (actor.includes("adversarial_reviewer")) return "Adversarial finding";
+  if (action.includes("violation") || action.includes("block")) return "Policy finding";
+  if (action.includes("round") || action.includes("opinion")) return null;
+  return event.action.replaceAll("_", " ");
+}
+
+function auditDisplayEvents(events: AuditEvent[]): AuditEvent[] {
+  const collapsed = new Map<string, AuditEvent>();
+
+  for (const event of events) {
+    const label = auditActionLabel(event);
+    if (!label) continue;
+    const key = [event.question_id ?? "global", event.actor, label, event.summary.trim().toLowerCase()].join("|");
+    collapsed.set(key, { ...event, action: label });
+  }
+
+  return [...collapsed.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
 export default async function AuditPage() {
   const events = await fetchAudit();
-  const recent = events.slice(-200).reverse();
+  const recent = auditDisplayEvents(events).slice(0, 200);
 
   return (
     <>
@@ -40,10 +72,10 @@ export default async function AuditPage() {
         <header className="appHeader">
           <div>
             <p className="eyebrow">Audit Trail</p>
-            <h1>{events.length} events</h1>
+            <h1>{recent.length} events</h1>
             <p className="subtitle">
-              Every agent opinion, policy check, adversarial finding, and human decision lands here with a
-              payload hash for tamper detection.
+              Material findings, policy checks, human decisions, and finalization records with payload hashes
+              for tamper detection.
             </p>
           </div>
         </header>

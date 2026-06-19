@@ -17,6 +17,7 @@ import RfpUpload from "./RfpUpload";
 import { Logo } from "./Logo";
 import type {
   AgentOpinion,
+  AuditEvent,
   BandEventRecord,
   BandGateState,
   QuestionStatus,
@@ -97,6 +98,38 @@ function auditKind(action: string): "approved" | "alert" | "decision" | "neutral
     return "alert";
   if (a.includes("decision") || a.includes("human") || a.includes("gate")) return "decision";
   return "neutral";
+}
+
+function auditActionLabel(event: AuditEvent): string | null {
+  const action = event.action.toLowerCase();
+  const summary = event.summary.toLowerCase();
+  const actor = event.actor.toLowerCase();
+
+  if (action.includes("finalize")) return "Final answer locked";
+  if (action.includes("ledger")) return "Promise ledger entry";
+  if (action.includes("reject")) return "Rejection recorded";
+  if (action.includes("escalat")) return "Escalation recorded";
+  if (action.includes("approve") || summary.includes("approved")) return "Approval recorded";
+  if (action.includes("decision") || action.includes("human") || action.includes("gate")) return "Human decision";
+  if (action.includes("injection") || summary.includes("prompt injection")) return "Prompt injection finding";
+  if (actor.includes("legal_commitment_guard")) return "Policy check";
+  if (actor.includes("adversarial_reviewer")) return "Adversarial finding";
+  if (action.includes("violation") || action.includes("block")) return "Policy finding";
+  if (action.includes("round") || action.includes("opinion")) return null;
+  return event.action.replaceAll("_", " ");
+}
+
+function auditDisplayEvents(events: AuditEvent[]): AuditEvent[] {
+  const collapsed = new Map<string, AuditEvent>();
+
+  for (const event of events) {
+    const label = auditActionLabel(event);
+    if (!label) continue;
+    const key = [event.question_id ?? "global", event.actor, label, event.summary.trim().toLowerCase()].join("|");
+    collapsed.set(key, { ...event, action: label });
+  }
+
+  return [...collapsed.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 const ROOM_AGENTS = [
@@ -374,6 +407,7 @@ export default function Dashboard({
   const evidence = selected ? dedupeEvidence(selected.opinions) : [];
   const liveProvider = live.provider_mode !== "mock";
   const stateInfo = selected ? answerState(selected) : null;
+  const auditEvents = auditDisplayEvents(live.audit_trail);
 
   const derivedRisk =
     total > 0 ? questions.reduce((sum, q) => sum + (RISK_WEIGHT[q.risk_level] ?? 0), 0) / total : 0;
@@ -900,15 +934,15 @@ export default function Dashboard({
           <section className="auditPanel" aria-label="Audit trail">
             <div className="sectionTitle">
               <h2>Audit Trail</h2>
-              <span>{live.audit_trail.length} events · hashed &amp; timestamped</span>
+              <span>{auditEvents.length} events · hashed &amp; timestamped</span>
             </div>
-            {live.audit_trail.length === 0 ? (
+            {auditEvents.length === 0 ? (
               <p className="intakeEmpty">
-                No audit events yet — they accrue as the agents deliberate and answers finalize.
+                No audit events yet — material findings, decisions, and finalizations will appear here.
               </p>
             ) : (
               <ul className="auditList">
-                {[...live.audit_trail].reverse().map((event) => (
+                {auditEvents.map((event) => (
                   <li key={event.event_id} className={`auditRow audit-${auditKind(event.action)}`}>
                     <span className="auditDot" aria-hidden />
                     <div className="auditBody">

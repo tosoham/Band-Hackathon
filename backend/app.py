@@ -14,7 +14,7 @@ from core.orchestrator_store import get_orchestrator, reset_orchestrator
 from core.paths import project_root
 from core.rfp_ingest import pdf_to_rows, rows_to_csv_bytes
 from core.provider_config import load_provider_config
-from core.state_store import get_state, reset_state
+from core.state_store import get_state, reset_state, reset_state_for_intake_refresh
 
 app = FastAPI(title="BandGate API", version="0.3.0")
 
@@ -182,7 +182,10 @@ def decide(question_id: str, body: DecisionRequest) -> dict:
 
 @app.post("/demo/reset")
 def reset() -> dict:
-    state = reset_state()
+    uploaded = project_root() / "data" / "uploaded_rfp.csv"
+    if uploaded.exists():
+        uploaded.unlink()
+    state = reset_state_for_intake_refresh()
     reset_orchestrator()
     return {"status": "reset", "questions": len(state.questions)}
 
