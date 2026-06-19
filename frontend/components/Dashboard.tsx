@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Icon, { type IconName } from "./Icon";
 import { type Decision } from "./ApprovalControls";
 import BandTimeline from "./BandTimeline";
@@ -56,16 +56,26 @@ function riskClass(risk: string) {
   return `risk risk-${risk}`;
 }
 
+const DELIBERATING = ["drafting", "evidence_review", "policy_review", "adversarial_review"];
+
 function statusLabel(question: RFPQuestionState) {
-  if (question.risk_tags.includes("prompt_injection")) return "Attack detected";
-  if (question.conflict_detected) return "Needs review";
-  return "Ready";
+  const s = question.status;
+  const last = question.approvals[question.approvals.length - 1];
+  if (s === "finalized" || s === "approved") return "Approved";
+  if (s === "rejected") return "Rejected";
+  if (s === "human_review") return last?.decision === "rejected" ? "Rejected" : "At human gate";
+  if (DELIBERATING.includes(s)) return "Deliberating";
+  return "Queued";
 }
 
 function statusKind(question: RFPQuestionState) {
-  if (question.risk_tags.includes("prompt_injection")) return "attack";
-  if (question.conflict_detected) return "review";
-  return "ok";
+  const s = question.status;
+  const last = question.approvals[question.approvals.length - 1];
+  if (s === "finalized" || s === "approved") return "ok";
+  if (s === "rejected" || (s === "human_review" && last?.decision === "rejected")) return "attack";
+  if (s === "human_review") return "review";
+  if (DELIBERATING.includes(s)) return "review";
+  return "queued";
 }
 
 function confidencePct(value: number) {
@@ -253,9 +263,36 @@ export default function Dashboard({
   bandReport?: string;
   publicBackendUrl?: string;
 }) {
+  const [live, setLive] = useState<BandGateState>(state);
   const [byId, setById] = useState<Record<string, RFPQuestionState>>(state.questions);
   const [view, setView] = useState<View>("overview");
   const [subTab, setSubTab] = useState<SubTab>("agents");
+
+  // The pipeline runs server-side; poll /state so question statuses, the Promise
+  // Ledger, the Audit Trail, and recorded decisions stay live (and survive
+  // navigating between questions).
+  useEffect(() => {
+    if (!publicBackendUrl) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await fetch(`${publicBackendUrl.replace(/\/+$/, "")}/state`, { cache: "no-store" });
+        if (!res.ok || !alive) return;
+        const fresh = (await res.json()) as BandGateState;
+        if (!alive) return;
+        setLive(fresh);
+        setById(fresh.questions);
+      } catch {
+        /* transient — keep last known state */
+      }
+    };
+    tick();
+    const id = setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [publicBackendUrl]);
 
   const questions = Object.values(byId).sort(
     (a, b) => (RISK_ORDER[a.risk_level] ?? 9) - (RISK_ORDER[b.risk_level] ?? 9),
@@ -327,7 +364,7 @@ export default function Dashboard({
 
   const derivedRisk =
     total > 0 ? questions.reduce((sum, q) => sum + (RISK_WEIGHT[q.risk_level] ?? 0), 0) / total : 0;
-  const rawScore = state.global_risk_score > 0 ? state.global_risk_score : derivedRisk;
+  const rawScore = live.global_risk_score > 0 ? live.global_risk_score : derivedRisk;
   const score = Math.round(rawScore <= 1 ? rawScore * 100 : rawScore);
   const posture = postureBand(score);
 
@@ -819,8 +856,9 @@ export default function Dashboard({
               {subTab === "band" && <BandTimeline question={selected} />}
               {subTab === "liveroom" && (
                 <LiveRoomPanel
+                  key={selected.question_id}
                   questionId={selected.question_id}
-                  rfpId={state.rfp_id}
+                  rfpId={live.rfp_id}
                   publicBackendUrl={publicBackendUrl}
                   onDecide={decide}
                   recommended={recommendedAnswer(selected)}
@@ -839,21 +877,21 @@ export default function Dashboard({
         )}
 
         {view === "bandroom" && <BandRoom events={bandEvents} report={bandReport} />}
-        {view === "risk" && <RiskDashboard state={state} />}
-        {view === "ledger" && <PromiseLedger state={state} />}
+        {view === "risk" && <RiskDashboard state={live} />}
+        {view === "ledger" && <PromiseLedger state={live} />}
         {view === "audit" && (
           <section className="queueWide" aria-label="Audit trail">
             <div className="sectionTitle">
               <h2>Audit Trail</h2>
-              <span>{state.audit_trail.length} events</span>
+              <span>{live.audit_trail.length} events</span>
             </div>
-            {state.audit_trail.length === 0 ? (
+            {live.audit_trail.length === 0 ? (
               <p className="intakeEmpty">
                 No audit events yet — they accrue as the agents deliberate and answers finalize.
               </p>
             ) : (
               <ol className="timeline">
-                {[...state.audit_trail].reverse().map((event) => (
+                {[...live.audit_trail].reverse().map((event) => (
                   <li key={event.event_id}>
                     <span>
                       {event.actor.replaceAll("_", " ")} · {event.action.replaceAll("_", " ")}
@@ -869,7 +907,7 @@ export default function Dashboard({
             )}
           </section>
         )}
-        {view === "exports" && <ExportBar state={state} />}
+        {view === "exports" && <ExportBar state={live} />}
       </div>
     </div>
   );

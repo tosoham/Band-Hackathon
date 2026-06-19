@@ -994,6 +994,14 @@ button {
 .status-ok .dot {
   background: var(--r-low);
 }
+.status-queued {
+  color: var(--muted);
+  background: var(--tint-2);
+  border-color: transparent;
+}
+.status-queued .dot {
+  background: var(--faint);
+}
 
 /* risk badge */
 .risk {
