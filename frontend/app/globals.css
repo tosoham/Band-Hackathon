@@ -2578,48 +2578,180 @@ button {
   color: var(--muted);
 }
 
+.auditPanel {
+  background:
+    linear-gradient(180deg, rgba(255, 254, 251, 0.92), rgba(250, 248, 242, 0.7)),
+    var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
 .auditList {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
-.auditList li {
+
+.auditListStandalone {
+  max-width: 980px;
+}
+
+.auditRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
-.auditList header {
+
+.auditRow::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--faint);
+}
+
+.auditRow + .auditRow::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  top: -11px;
+  width: 1px;
+  height: 10px;
+  background: var(--line-strong);
+}
+
+.auditDot {
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: var(--faint);
+  box-shadow: 0 0 0 4px var(--tint-2);
+}
+
+.auditBody {
+  min-width: 0;
+}
+
+.auditHead {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
   align-items: center;
-  font-size: 12px;
+  gap: 7px;
 }
-.auditList header strong {
+
+.auditActor,
+.auditAction,
+.auditQ {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  line-height: 1;
   text-transform: capitalize;
+}
+
+.auditActor {
+  color: var(--ink);
+  background: var(--tint);
+  border: 1px solid var(--line);
+  font-weight: 800;
+}
+
+.auditAction {
   color: var(--clay-ink);
+  background: var(--clay-bg);
+  border: 1px solid var(--clay-soft);
+  font-weight: 700;
 }
-.auditList header span {
+
+.auditQ {
   color: var(--muted);
-  text-transform: capitalize;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
 }
-.auditList header time {
+
+.auditTime {
   margin-left: auto;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.auditList p {
-  margin-top: 8px;
-  color: var(--ink);
-  font-size: 13px;
-}
-.auditList small {
-  display: block;
-  margin-top: 6px;
-  color: var(--muted);
+  font-family: var(--font-mono);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.auditSummary {
+  margin-top: 9px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auditHash {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--tint-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.audit-approved::before,
+.audit-approved .auditDot {
+  background: var(--r-low);
+}
+
+.audit-alert::before,
+.audit-alert .auditDot {
+  background: var(--r-critical);
+}
+
+.audit-decision::before,
+.audit-decision .auditDot {
+  background: var(--r-medium);
+}
+
+.audit-neutral::before,
+.audit-neutral .auditDot {
+  background: var(--faint);
+}
+
+.audit-approved .auditAction {
+  color: var(--r-low);
+  background: var(--r-low-bg);
+  border-color: color-mix(in srgb, var(--r-low) 24%, var(--line));
+}
+
+.audit-alert .auditAction {
+  color: var(--r-critical);
+  background: var(--r-critical-bg);
+  border-color: color-mix(in srgb, var(--r-critical) 24%, var(--line));
+}
+
+.audit-decision .auditAction {
+  color: var(--r-medium);
+  background: var(--r-medium-bg);
+  border-color: color-mix(in srgb, var(--r-medium) 24%, var(--line));
 }
 
 /* ===== Auth / login (warm paper + clay, split panel) ===== */

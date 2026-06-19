@@ -85,7 +85,18 @@ function confidencePct(value: number) {
 
 function eventTime(ts: string) {
   const d = new Date(ts);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function auditKind(action: string): "approved" | "alert" | "decision" | "neutral" {
+  const a = action.toLowerCase();
+  if (a.includes("finalize") || a.includes("approve") || a.includes("ledger")) return "approved";
+  if (a.includes("reject") || a.includes("escalat") || a.includes("block") || a.includes("violation") || a.includes("injection"))
+    return "alert";
+  if (a.includes("decision") || a.includes("human") || a.includes("gate")) return "decision";
+  return "neutral";
 }
 
 const ROOM_AGENTS = [
@@ -886,30 +897,37 @@ export default function Dashboard({
         {view === "risk" && <RiskDashboard state={live} />}
         {view === "ledger" && <PromiseLedger state={live} />}
         {view === "audit" && (
-          <section className="queueWide" aria-label="Audit trail">
+          <section className="auditPanel" aria-label="Audit trail">
             <div className="sectionTitle">
               <h2>Audit Trail</h2>
-              <span>{live.audit_trail.length} events</span>
+              <span>{live.audit_trail.length} events · hashed &amp; timestamped</span>
             </div>
             {live.audit_trail.length === 0 ? (
               <p className="intakeEmpty">
                 No audit events yet — they accrue as the agents deliberate and answers finalize.
               </p>
             ) : (
-              <ol className="timeline">
+              <ul className="auditList">
                 {[...live.audit_trail].reverse().map((event) => (
-                  <li key={event.event_id}>
-                    <span>
-                      {event.actor.replaceAll("_", " ")} · {event.action.replaceAll("_", " ")}
-                      {event.question_id ? ` · ${event.question_id}` : ""}
-                    </span>
-                    <p>{event.summary || "—"}</p>
-                    <small suppressHydrationWarning>
-                      {new Date(event.timestamp).toLocaleString()} · {event.payload_hash.slice(0, 12)}
-                    </small>
+                  <li key={event.event_id} className={`auditRow audit-${auditKind(event.action)}`}>
+                    <span className="auditDot" aria-hidden />
+                    <div className="auditBody">
+                      <div className="auditHead">
+                        <span className="auditActor">{event.actor.replaceAll("_", " ")}</span>
+                        <span className="auditAction">{event.action.replaceAll("_", " ")}</span>
+                        {event.question_id ? <span className="auditQ">{event.question_id}</span> : null}
+                        <span className="auditTime" suppressHydrationWarning>
+                          {eventTime(event.timestamp)}
+                        </span>
+                      </div>
+                      {event.summary ? <p className="auditSummary">{event.summary}</p> : null}
+                      <code className="auditHash" title="payload hash (integrity)">
+                        {event.payload_hash.slice(0, 16)}
+                      </code>
+                    </div>
                   </li>
                 ))}
-              </ol>
+              </ul>
             )}
           </section>
         )}

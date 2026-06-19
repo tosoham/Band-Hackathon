@@ -13,6 +13,23 @@ async function fetchAudit(): Promise<AuditEvent[]> {
   }
 }
 
+function eventTime(ts: string) {
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function auditKind(action: string): "approved" | "alert" | "decision" | "neutral" {
+  const a = action.toLowerCase();
+  if (a.includes("finalize") || a.includes("approve") || a.includes("ledger")) return "approved";
+  if (a.includes("reject") || a.includes("escalat") || a.includes("block") || a.includes("violation") || a.includes("injection")) {
+    return "alert";
+  }
+  if (a.includes("decision") || a.includes("human") || a.includes("gate")) return "decision";
+  return "neutral";
+}
+
 export default async function AuditPage() {
   const events = await fetchAudit();
   const recent = events.slice(-200).reverse();
@@ -30,19 +47,24 @@ export default async function AuditPage() {
             </p>
           </div>
         </header>
-        <ol className="auditList">
+        <ol className="auditList auditListStandalone">
           {recent.map((event) => (
-            <li key={event.event_id}>
-              <header>
-                <strong>{event.actor.replaceAll("_", " ")}</strong>
-                <span>{event.action.replaceAll("_", " ")}</span>
-                <time>{new Date(event.timestamp).toLocaleString()}</time>
-              </header>
-              <p>{event.summary}</p>
-              <small>
-                {event.question_id ? `${event.question_id} · ` : ""}hash:{" "}
-                <code>{event.payload_hash.slice(0, 16)}…</code>
-              </small>
+            <li key={event.event_id} className={`auditRow audit-${auditKind(event.action)}`}>
+              <span className="auditDot" aria-hidden />
+              <div className="auditBody">
+                <div className="auditHead">
+                  <span className="auditActor">{event.actor.replaceAll("_", " ")}</span>
+                  <span className="auditAction">{event.action.replaceAll("_", " ")}</span>
+                  {event.question_id ? <span className="auditQ">{event.question_id}</span> : null}
+                  <span className="auditTime" suppressHydrationWarning>
+                    {eventTime(event.timestamp)}
+                  </span>
+                </div>
+                {event.summary ? <p className="auditSummary">{event.summary}</p> : null}
+                <code className="auditHash" title="payload hash (integrity)">
+                  {event.payload_hash.slice(0, 16)}
+                </code>
+              </div>
             </li>
           ))}
           {recent.length === 0 ? <li className="emptyState">No audit events yet.</li> : null}
